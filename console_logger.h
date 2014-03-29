@@ -61,7 +61,7 @@ LogLine
 //    alignas(size_t)
     char                msg[1];
 
-    static EE5RC create_buffer(size_t size,LogLinePtr& pBuffer,size_t* pcMsg = nullptr, char** ppMsg = nullptr)
+    static RC create_buffer(size_t size,LogLinePtr& pBuffer,size_t* pcMsg = nullptr, char** ppMsg = nullptr)
     {
         char*   pBuf    = nullptr;
 
@@ -91,7 +91,7 @@ LogLine
 
 typedef LogLine::LogLinePtr LogLinePtr;
 
-EE5RC cb_vsnprintf(size_t c,char* p,size_t* pc,char** ppP,const char* fmt,va_list v);
+RC cb_vsnprintf(size_t c,char* p,size_t* pc,char** ppP,const char* fmt,va_list v);
 
 
 //---------------------------------------------------------------------------------------------------------------------

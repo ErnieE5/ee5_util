@@ -25,6 +25,6 @@ typedef result_code_t       rc_t;
 
 }       // namespace oakt
 
-typedef ee5::result_code_t EE5RC;
+typedef ee5::result_code_t RC;
 
 #endif  // ERROR_HANDLING_H_

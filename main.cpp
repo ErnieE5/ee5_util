@@ -1,10 +1,16 @@
 //-------------------------------------------------------------------------------------------------
+// Copyright (C) 2014 Ernest R. Ewert
 // 
-// Copyright 2014 Ernest R. Ewert
+// Feel free to use this as you see fit. 
+// I ask that you keep my name with the code.
 //
-// This header contains delegate template helpers.
-//
-//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+// EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+// MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
+// IN NO EVENT SHALL THE AUTHORS BE LIABLE FOR ANY CLAIM, DAMAGES OR
+// OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
+// ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
+// OTHER DEALINGS IN THE SOFTWARE.
 //
 
 #include "system.h"
@@ -165,12 +171,129 @@ void t_function(T t)
 
 
 
+
 //---------------------------------------------------------------------------------------------------------------------
 //
 //
 //
 //
-class TP
+class i_marshal_work
+{
+
+private:
+    typedef std::unique_ptr<ee5::i_marshaled_call> CallPtr;
+
+    virtual RC get_storage(size_t size,void** p)    = 0;
+    virtual RC enqueue_work(CallPtr&& p)            = 0;    
+
+//    static void* operator new(std::size_t) { return nullptr; }
+
+public:
+    // This turns non-scaler types into references in the function signature. Copy semantics
+    // can be extraordinarily expensive and while we need to make a copy of the values during the
+    // marshaling of the data, it would be "criminal" to make yet ANOTHER copy of the data that
+    // is sitting in the tuple that acts as storage.
+    //
+    template<typename Arg>
+    struct ref_val
+    {
+        typedef typename std::conditional<
+                /* if */    std::is_scalar<Arg>::value,
+                /* then */  Arg,
+                /* else */  typename std::add_lvalue_reference<Arg>::type
+                >::type value_type;
+    };
+
+
+    // Call a member function of a class in the context of a thread pool thread
+    // with zero or more arguments with rvalue semantics.
+    //
+    template<typename O, typename ...TArgs>
+    RC Async(O* pO, void (O::*pM)(typename ref_val<TArgs>::value_type...),TArgs&&...args)
+    {
+        typedef object_method_delegate<O,void,typename ref_val<TArgs>::value_type...> binder;
+        typedef marshaled_call<binder,typename std::remove_reference<TArgs>::type...> call_type;
+
+        CRR( enqueue_work( CallPtr( new call_type( binder(pO,pM), args... ) ) ) );
+
+        return s_ok();
+    }
+
+    // Call a member function of a class in the context of a thread pool thread
+    // with zero or more arguments that are constant lvalue types
+    //
+    template<typename O, typename ... TArgs>
+    RC Async(O* pO, void (O::*pM)(typename ref_val<TArgs>::value_type...),const TArgs&...args)
+    {
+        typedef object_method_delegate<O,void,typename ref_val<TArgs>::value_type...> binder;
+        typedef marshaled_call<binder,typename std::remove_reference<TArgs>::type...> call_type;
+
+        CRR( enqueue_work( CallPtr( new call_type( binder(pO,pM), args... ) ) ) );
+
+        return s_ok();
+    }
+
+    // Call any function or functor that can compile to a void(void) signature
+    //
+    template<typename TFunction>
+    RC Async( TFunction f )
+    {
+        typedef marshaled_call< std::function< void() > > void_void_call_type;
+
+        CRR( enqueue_work( CallPtr( new void_void_call_type(f) ) ) );
+
+        return s_ok();
+    }
+
+
+    // This is a little of a mess. In order to support lambda expressions
+    // We need to distinguish between the pointer to a member function and the first argument of the lambda.
+    // This has the "messed up" side effect that a lambda expression can not pass a pointer to a
+    // member function as the first argument.  This restriction is because the compiler won't be able to
+    // disambiguate between this use and the O*->Member(...) usage.
+    //
+    template<
+        typename    TFunction,  // Any expression that evaluates to a "plain" function call with at
+                                // least a single argument.
+        typename    TArg1,      // The first argument to allow for disabling selection
+        typename... TArgs,      // Zero or more additional arguments
+        typename =  typename    // This syntax sucks. "Attribute mark-up" ~could~ be better.
+            std::enable_if
+            <
+                (
+                    /* The function value must be a "class" that evaluates to a functor */
+                    std::is_class< typename std::remove_pointer<TFunction>::type>::value    ||
+                    /* or a function type. */
+                    std::is_function< typename std::remove_pointer<TFunction>::type>::value
+                )
+                && /* The first marshaled argument can not be a pointer to a member function of a class. */
+                (
+                    ! std::is_member_function_pointer<TArg1>::value
+                ),
+                TFunction 
+            >::type 
+    >
+    RC Async(TFunction f,TArg1 a,TArgs&&...args)
+    {
+        typedef std::function<void(TArg1,typename ref_val<TArgs>::value_type...)> function_type;
+        typedef marshaled_call<function_type,TArg1,typename std::remove_reference<TArgs>::type...> call_type;
+
+        CRR( enqueue_work( CallPtr( new call_type( f, a, args... ) ) ) );
+
+        return s_ok();
+    }
+
+};
+
+
+
+
+//---------------------------------------------------------------------------------------------------------------------
+//
+//
+//
+//
+class TP : public i_marshal_work
 {
 private:
     typedef std::unique_ptr<ee5::i_marshaled_call> CallPtr;
@@ -180,7 +303,15 @@ private:
     size_t          t_count = std::thread::hardware_concurrency();
     size_t          x       = 0;
 
-    EE5RC Enqueue(CallPtr&& p)
+    RC get_storage(size_t size,void** pp)
+    {
+        CBREx( pp != nullptr, e_invalid_argument(2,"value must be non-null") );
+        CMA( *pp = calloc(size,1) );
+
+        return s_ok();
+    }
+
+    RC enqueue_work(CallPtr&& p)
     {
         threads[x%t_count].Enqueue( std::move( p ) , nullptr);
         ++x;
@@ -212,96 +343,6 @@ public:
         }
     }
 
-    // This turns non-scaler types into references in the function signature. Copy semantics
-    // can be extraordinarily expensive and while we need to make a copy of the values during the
-    // marshaling of the data, it would be "criminal" to make yet ANOTHER copy of the data that
-    // is sitting in the tuple that acts as storage.
-    //
-    template<typename Arg>
-    struct ref_val
-    {
-        typedef typename std::conditional<
-                /* if */    std::is_scalar<Arg>::value,
-                /* then */  Arg,
-                /* else */  typename std::add_lvalue_reference<Arg>::type
-                >::type value_type;
-    };
-
-
-    // Call a member function of a class in the context of a thread pool thread
-    // with zero or more arguments with rvalue semantics.
-    //
-    template<typename O, typename ...TArgs>
-    EE5RC Async(O* pO, void (O::*pM)(typename ref_val<TArgs>::value_type...),TArgs&&...args)
-    {
-        typedef object_method_delegate<O,void,typename ref_val<TArgs>::value_type...> binder;
-        typedef marshaled_call<binder,typename std::remove_reference<TArgs>::type...> call_type;
-
-        CRR( Enqueue( CallPtr( new call_type( binder(pO,pM), args... ) ) ) );
-
-        return s_ok();
-    }
-
-    // Call a member function of a class in the context of a thread pool thread
-    // with zero or more arguments that are constant lvalue types
-    //
-    template<typename O, typename ... TArgs>
-    EE5RC Async(O* pO, void (O::*pM)(typename ref_val<TArgs>::value_type...),const TArgs&...args)
-    {
-        typedef object_method_delegate<O,void,typename ref_val<TArgs>::value_type...> binder;
-        typedef marshaled_call<binder,typename std::remove_reference<TArgs>::type...> call_type;
-
-        CRR( Enqueue( CallPtr( new call_type( binder(pO,pM), args... ) ) ) );
-
-        return s_ok();
-    }
-
-    // Call any function or functor that can compile to a void(void) signature
-    //
-    template<typename TFunction>
-    EE5RC Async( TFunction f )
-    {
-        typedef marshaled_call< std::function< void() > > void_void_call_type;
-
-        CRR( Enqueue( CallPtr( new void_void_call_type(f) ) ) );
-
-        return s_ok();
-    }
-
-
-    // This is a little of a mess. In order to support lambda expressions
-    // We need to distinguish between the pointer to a member function and the first argument of the lambda.
-    // This has the "messed up" side effect that a lambda expression can not pass a pointer to a
-    // member function as the first argument.  This restriction is because the compiler won't be able to
-    // disambiguate between this use and the O*->Member(...) usage.
-    //
-    template<
-        typename    TFunction,  // Any expression that evaluates to a "plain" function call with at
-                                // least a single argument.
-        typename    TArg1,      // The first argument to allow for disabling selection
-        typename... TArgs,      // Zero or more additional arguments
-        typename =  typename    // This syntax sucks. "Attribute mark-up" ~could~ be better.
-                std::enable_if<
-                        (
-                            /* The function value must be a "class" that evaluates to a functor */
-                            std::is_class< typename std::remove_pointer<TFunction>::type>::value    ||
-                            /* or a function type. */
-                            std::is_function< typename std::remove_pointer<TFunction>::type>::value
-                        )
-                        && /* The first marshaled argument can not be a pointer to a member function of a class. */
-                        (
-                            ! std::is_member_function_pointer<TArg1>::value
-                        ),
-                        TFunction >::type >
-    EE5RC Async(TFunction f,TArg1 a,TArgs&&...args)
-    {
-        typedef std::function<void(TArg1,typename ref_val<TArgs>::value_type...)> function_type;
-        typedef marshaled_call<function_type,TArg1,typename std::remove_reference<TArgs>::type...> call_type;
-
-        CRR( Enqueue( CallPtr( new call_type( f, a, args... ) ) ) );
-
-        return s_ok();
-    }
 };
 
 
@@ -311,7 +352,7 @@ public:
 //
 //
 //
-EE5RC FunctionTests()
+RC FunctionTests()
 {
     LOG_FRAME(0,"Thread pool %s","test!");
     LOG_ALWAYS("%s","testing...");

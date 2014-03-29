@@ -30,7 +30,7 @@ ConsoleLogger::ThreadPtr ConsoleLogger::pThread;
 //
 //
 //
-EE5RC cb_vsnprintf(size_t c,char* p,size_t* pc,char** ppP,const char* fmt,va_list v)
+RC cb_vsnprintf(size_t c,char* p,size_t* pc,char** ppP,const char* fmt,va_list v)
 {
     int i = vsnprintf(p,c,fmt,v);
 
@@ -48,7 +48,7 @@ EE5RC cb_vsnprintf(size_t c,char* p,size_t* pc,char** ppP,const char* fmt,va_lis
 //
 void ConsoleLogger::console_log(const __info* i,...)
 {
-    EE5RC   rc  = s_ok();
+    RC   rc  = s_ok();
     size_t  c   = 0;
     char*   p   = nullptr;
 
