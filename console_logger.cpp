@@ -32,9 +32,15 @@ ConsoleLogger::ThreadPtr ConsoleLogger::pThread;
 //
 RC cb_vsnprintf(size_t c,char* p,size_t* pc,char** ppP,const char* fmt,va_list v)
 {
-    int i = vsnprintf(p,c,fmt,v);
+    int i = std::vsnprintf(p,c,fmt,v);
+    
+    if( i < 0 || i > c )
+    {
+        return e_overflow();
+    }
 
-    i = i + 0;
+    *pc  -= i;
+    *ppP += i;
 
     return s_ok();
 }

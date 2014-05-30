@@ -118,6 +118,13 @@ INCLUDE_PATHS+=\
 DEFINES+=\
 	BUILD_VERSION=$(shell date -u +"%F_%T")
 
+ifeq ($(O_TYPE),Release)
+DEFINES+= \
+	NDEBUG=1
+endif
+
+
+
 #=======================================================================================================================
 #
 # Expansion for any -f arguments.

@@ -16,6 +16,7 @@ typedef result_code_t       rc_t;
 #define e_out_of_memory()       static_cast<result_code_t>(0x8000000000000001)
 #define e_invalid_argument(a,m) static_cast<result_code_t>(0x8000000000000002)
 #define e_unexpected()          static_cast<result_code_t>(0x8000000000000003)
+#define e_overflow()            static_cast<result_code_t>(0x8000000000000004)
 
 #define CBREx( x, e )   do { if ( !(x) )           { return (e);                   } } while(0)
 #define CMA( x )        do { if ( (x) == nullptr ) { return e_out_of_memory();     } } while(0)

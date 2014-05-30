@@ -123,8 +123,6 @@ private:
 
     void Thread()
     {
-        printf("4\n");
-
         while( !quit )
         {
             sig.Chill();

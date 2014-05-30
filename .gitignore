@@ -14,3 +14,7 @@
 
 build.log
 x86_*
+
+*~
+.kdev4
+ee5_util.kdev4

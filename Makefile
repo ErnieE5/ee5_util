@@ -30,8 +30,4 @@ LIBRARIES:=\
 	stdc++ \
 	pthread \
 
-
-
 include clang.mk
-
-

@@ -130,11 +130,8 @@ protected:
 public:
     static int Startup(program_log* pLog)
     {
-        printf("1\n");
         pThread.reset( new work_thread( 55, std::function<void(LogLinePtr&)>(ConsoleLogger::Doit) ) );
-        printf("2\n");
         *pLog = ConsoleLogger::console_log;
-        printf("3\n");
         return pThread->Startup();
     }
 

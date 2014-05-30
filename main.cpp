@@ -18,6 +18,9 @@
 #include "delegate.h"
 #include "workthread.h"
 
+#include "atomic_stack.h"
+#include "static_memory_pool.h"
+
 #include <stdio.h>
 #include <cassert>
 #include <cstddef>
@@ -284,6 +287,61 @@ public:
     }
 
 };
+
+#include <array>
+
+
+
+
+
+
+
+
+
+static_memory_pool<128,10> mem;
+
+void Moink()
+{
+    std::array<int,15> hey = {};
+    
+    for(auto j : hey)
+    {
+        printf("** %i\n",j);
+    }
+    
+    printf("%lu\n",sizeof(mem));
+    
+    std::vector<int*> items;
+    
+    
+    int k = 1;
+    
+    for( int* pi = mem.acquire<int>(); pi ; pi = mem.acquire<int>() )
+    {
+        *pi = k++;
+        
+        items.push_back(pi);
+    }
+
+    for(auto r : items)
+    {
+        mem.release(r);
+    }
+
+    assert( mem.release(&k) );
+    
+    
+    
+}
+
+
+
+
+
+
+
+
+
 
 
 
@@ -567,6 +625,8 @@ void App()
         LOG_FRAME(0,"Embedded frame..","");
         LOG_ALWAYS("互いに同胞の精神を%s","もって行動しなければならない。");
     }
+    
+    Moink();
 
     Timer   taft;
 
@@ -582,6 +642,8 @@ void App()
         LOG_ALWAYS("Hey %lu",y);
     }
 }
+
+
 
 
 
