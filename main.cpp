@@ -289,6 +289,7 @@ public:
 };
 
 #include <array>
+#include <forward_list>
 
 
 
@@ -296,23 +297,14 @@ public:
 
 
 
+typedef static_memory_pool<128,10> mem_pool;
 
+mem_pool mem;
 
-static_memory_pool<128,10> mem;
 
 void Moink()
 {
-    std::array<int,15> hey = {};
-    
-    for(auto j : hey)
-    {
-        printf("** %i\n",j);
-    }
-    
-    printf("%lu\n",sizeof(mem));
-    
     std::vector<int*> items;
-    
     
     int k = 1;
     
@@ -327,15 +319,87 @@ void Moink()
     {
         mem.release(r);
     }
+    
+    assert( mem.release(&k) == false );
 
-    assert( mem.release(&k) );
-    
-    
+    struct pod
+    {
+        int x;
+        unsigned y;
+        double z;
+    };
+
+    {
+        using pooled_pod = mem_pool::unique_type<pod>;
+        std::forward_list< pooled_pod > managed;
+
+        int      v = 0;
+        double   d = .1;
+        unsigned u = 0x10;
+        
+        auto f = mem.acquire_unique<pod>();
+        
+        for( pooled_pod pp = mem.acquire_unique<pod>() ; pp ; pp = mem.acquire_unique<pod>() )
+        {
+            pp->x = v++;
+            pp->y = u++;
+            pp->z = d;
+            d += .1;
+            managed.emplace_front( std::move(pp) );
+        }
+
+        for( auto& g : managed )
+        {
+            printf(" %2i %2u %2g\n",g->x,g->y,g->z);
+        }
+    }
     
 }
 
 
+//         typedef static_memory_pool<64,10>   mem_pool;
+//         using pooled_int = mem_pool::unique_type<int>;
+// 
+//         
+//         
+//         mem_pool pool;
+// 
+//         auto a          = pool.acquire_unique<int>();
+//         *a = 15;
+//         
+//         pooled_int b    = pool.acquire_unique<int>();
+//         *b = 30;
 
+
+
+//         using foo = mem_pool::unique_type<unsigned>;
+//         using get = foo (mem_pool::*)();
+//         get acc = &mem_pool::acquire_unique<unsigned>;
+// 
+//         if( std::is_member_function_pointer<get>::value )
+//         {
+    //             printf("dude!\n");
+    //         }
+    //         
+    //         auto ui = mem.acquire_unique<unsigned>();
+    //         
+    //         mem_pool::unique_type<unsigned> q = mem.acquire_unique<unsigned>();
+    //         
+    //         foo x = mem.acquire_unique<unsigned>();
+    //         foo y = (mem.*acc)();
+    //         
+    // 
+    //         *q  = 15;
+    //         *ui = 8;
+    
+    //        printf("a: %u\nb: %u\n",*a,*b);
+    
+    
+    
+    //         std::shared_ptr<int> sh = mem.acquire_shared<int>();
+    // 
+    //         *sh = 22;
+    
 
 
 
@@ -626,8 +690,6 @@ void App()
         LOG_ALWAYS("互いに同胞の精神を%s","もって行動しなければならない。");
     }
     
-    Moink();
-
     Timer   taft;
 
     FunctionTests();
@@ -654,14 +716,17 @@ void App()
 //
 int main()
 { 
-    int iRet = ee5::Startup(0,nullptr);
-
-    if( iRet == 0 )
-    {
-        App();
-
-        ee5::Shutdown();
-    }
+   Moink();
+    
+   int iRet = 0;
+//    int iRet = ee5::Startup(0,nullptr);
+// 
+//     if( iRet == 0 )
+//     {
+//         App();
+// 
+//         ee5::Shutdown();
+//     }
 
 
     return iRet;

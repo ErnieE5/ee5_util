@@ -20,6 +20,9 @@
 #include <array>
 #include <cstring>
 
+namespace ee5 
+{
+
 const int cache_alignment_intel_x86_64 = 64;
 
 //-------------------------------------------------------------------------------------------------
@@ -75,16 +78,17 @@ const int cache_alignment_intel_x86_64 = 64;
 template< int item_size, int item_count, int cache_alignment = cache_alignment_intel_x86_64 >
 class static_memory_pool
 {
+private:
     // This internal structure is mostly notational to avoid overuse of 
     // casting between the various usage of the memory.
     //
     struct pool_buffer
     {
-        // When the buffer has been "handed out" to the "user" the entire byte range  
+        // When the buffer has been acquired by the user the entire byte range  
         // between the base and base+item_size is "yours to use" as if you called 
         // calloc(1,item_size); 
         //
-        // When the buffer (memory region) is "owned" by the cache, the member next is 
+        // When the buffer (memory region) is "owned" by the cache, the member next is
         // used for storage of items below in the stack,
         //
         union
@@ -93,6 +97,7 @@ class static_memory_pool
             pool_buffer*  next;
         };
     };
+    
     
     // The pool_buffer structure is mostly notational convenience, however this static assert 
     // is used  to alert you if you are breaking the general assumption by introducing a member 
@@ -106,16 +111,54 @@ class static_memory_pool
     // The "simple" array of like sized buffers becomes a part of the memory layout of this
     // object.
     //
-    storage_t   store = { };    // Use default initialization (effect is memset to zero)
-    stack_t     cache;          // available storage buffers
+    storage_t       store = { };    // Use default initialization (effect is memset to zero)
+    stack_t         cache;          // available storage buffers
 
-    // General memory idea
+    
+    // This internal functor structure maintains a back reference to the instance 
+    // of the static_memory_pool that a returned unique_ptr uses to release a region 
+    // of memory handed out by the pool. Normally, binding the instance of the class 
+    // to a generic member function through a std::bind or ee5::object_method_delegate 
+    // would remove the need for this declaration. However, both of those methods (or 
+    // even a lambda) would require twice the storage. (The pointer to the object instance
+    // and the pointer to the member/lambda.)
+    //    
+    struct pool_deleter
+    {
+        static_memory_pool* pool;
+        
+        pool_deleter() = delete;
+        pool_deleter(static_memory_pool* p)         : pool(p)       { }
+        pool_deleter(const static_memory_pool& p)   : pool(p.pool)  { }
+        
+        void operator()(void* buffer) 
+        { 
+            // The pool_deleter is private and the unique_ptr "mostly" 
+            // protects the user from doing "the wrong thing." This routine 
+            // bypasses the is_valid_pointer verification. Also, the unique_ptr
+            // implementation already checks against nullptr. (Most optimizers
+            // would be decent about removing this, but it is duplicated code.)
+            //
+            pool->internal_release( buffer ); 
+        }
+    };
+    
+    
+    // release a buffer back to the class and allow it to be recycled.
     //
-    // [Buffer][...]<Atomic pointer to "top" of available storage>
-    //
+    void internal_release(void* buffer)
+    {
+        // Honor the zeroed memory contract 
+        //
+        std::memset( buffer, 0, item_size );
+        
+        // Stash in cache.
+        //
+        cache.push( reinterpret_cast<pool_buffer*>( buffer ) );
+    }
+
     
 public:
-
     // Constructor
     //    
     static_memory_pool()
@@ -129,6 +172,7 @@ public:
         }
     }
 
+    
     // A method to check if the pointer "belongs" to this class.
     //
     // The pointer only belongs IF it is in the proper range and the pointer
@@ -141,6 +185,7 @@ public:
         ( reinterpret_cast<pool_buffer*>(buffer) <= &store.back()  ) &&
         ((reinterpret_cast<ptrdiff_t>(buffer) - reinterpret_cast<ptrdiff_t>(store.data())) % sizeof(pool_buffer)) == 0;
     }
+    
     
     // acquire a buffer
     // 
@@ -159,6 +204,23 @@ public:
         
         return ret;
     }
+
+    
+    // release a buffer back to the class and allow it to be
+    // recycled.
+    //
+    bool release(void* buffer)
+    {
+        bool valid = is_valid_pointer(buffer);
+        
+        if( valid )
+        {
+            internal_release(buffer);
+        }
+        
+        return valid;
+    }
+    
     
     // acquire a buffer as a specific type.
     // 
@@ -175,24 +237,78 @@ public:
     {
         return reinterpret_cast<T*>( acquire() );
     }
+    
 
-    // release a buffer back to the class and allow it to be
-    // recycled.
+    //---------------------------------------------------------------------------------------------
+    // unique_ptr support
     //
-    bool release(void* buffer)
+    //      unique_ptr support is only enabled if the type is a POD type. 
+    //      (Plain Old Data.) This class is intended for "higher performance" 
+    //      applications where other types of "magic" may be happening in
+    //      wrappers that use this implementation as a foundation. Directly 
+    //      adding support for things like shared_ptr and other more advanced 
+    //      features are beyond the scope of what ~this~ implementation is 
+    //      intended to be used for. 
+    // 
+    //      A typedef or using alias can simplify the usage from a 
+    //      verbosity perspective.
+    //
+    //  Examples:
+    //      typedef static_memory_pool<64,10>   mem_pool;
+    //      using pooled_int = mem_pool::unique_type<int>;
+    //      
+    //      mem_pool pool;
+    //
+    //      auto a          = pool.acquire_unique<int>();
+    //      *a = 15;
+    //      
+    //      pooled_int b    = pool.acquire_unique<int>();
+    //      *b = 30;
+    //      
+    //      struct simple
+    //      {
+    //          int         x;
+    //          unsigned    y;
+    //          double      z;
+    //      }
+    //
+    //     using pooled_simple = mem_pool::unique_type<simple>;
+    //     std::forward_list< pooled_simple > managed;
+    //     
+    //     int      q = 0;
+    //     unsigned e = 0x10;
+    //     double   d = .1;
+    //     
+    //     for( pooled_pod pp = mem.acquire_unique<pod>() ; pp ; pp = mem.acquire_unique<pod>() )
+    //     {
+    //         pp->x = q++;
+    //         pp->y = e++;
+    //         pp->z = d;
+    //         d += .1;
+    //         managed.emplace_front( std::move(pp) );
+    //     }
+    //
+    //---------------------------------------------------------------------------------------------
+    
+    
+    // Can help simplify the declaration of a unique_ptr handler for the pool.
+    //
+    template<typename T, typename std::enable_if<std::is_pod<T>::value, T >::type* = nullptr >
+    using unique_type = std::unique_ptr<T,pool_deleter>;
+
+    
+    // acquire a unique_ptr to manage the lifetime of the buffer.
+    // 
+    //  An explicit release is NOT required.
+    //
+    template<typename T, typename std::enable_if< std::is_pod<T>::value, T >::type* = nullptr >
+    unique_type<T> acquire_unique()
     {
-        bool valid = is_valid_pointer(buffer);
-        
-        if( valid )
-        {
-            std::memset(buffer,0,item_size);
-            
-            cache.push( reinterpret_cast<pool_buffer*>(buffer) );
-        }
-        
-        return valid;
+        return unique_type<T>( acquire<T>(), pool_deleter(this) );
     }
+   
 };
 
-
-#endif // STATIC_MEMORY_POOL_H_
+    
+}       // namespace ee5
+#endif  // STATIC_MEMORY_POOL_H_
