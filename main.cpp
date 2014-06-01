@@ -42,110 +42,9 @@
 using namespace ee5;
 
 
-//---------------------------------------------------------------------------------------------------------------------
-//
-//
-//
-//
-class Timer
-{
-private:
-    typedef std::chrono::time_point<std::chrono::high_resolution_clock> hrc_time_point;
-    hrc_time_point s;
-
-protected:
-
-public:
-    Timer()
-    {
-        s = std::chrono::high_resolution_clock::now();
-    }
-
-    template< typename D = std::chrono::duration< float, std::micro > >
-    D Delta()
-    {
-        return std::chrono::high_resolution_clock::now() - s;
-    }
-
-    template<typename T = std::ostream,typename M = std::chrono::duration<float> >
-    void PrintDelta(T& o = std::cout)
-    {
-//        std::streamsize p = std::cout.precision(4);
-//        o << std::chrono::duration_cast<M>(Delta()).count() << std::endl;
-//        std::cout.precision(p);
-    }
-};
 
 
 
-//-------------------------------------------------------------------------------------------------
-//
-//
-//
-//
-struct ThreadpoolTest
-{
-    ThreadpoolTest()
-    {
-    }
-    ~ThreadpoolTest()
-    {
-    }
-
-    void NineArgs(int a, int b, int c, int d, int e, int f, int g, int h, int i)
-    {
-        LOG_ALWAYS("a:%i b:%i c:%i d:%i e:%i f:%i g:%i h:%i i:%i",a,b,c,d,e,f,g,h,i);
-
-        assert(a == 1);
-        assert(b == 2);
-        assert(c == 3);
-        assert(d == 4);
-        assert(e == 5);
-        assert(f == 6);
-        assert(g == 7);
-        assert(h == 8);
-        assert(i == 9);
-    }
-
-    void ScalarTypes(int a, double b,size_t c)
-    {
-        LOG_ALWAYS("a: %i b:%g c:%zu",a ,b ,c );
-    }
-
-    template<typename C>
-    void TemplateRef(C& items)
-    {
-        LOG_ALWAYS("(%zu)--", items.size() );
-    }
-
-    void ScalarAndReference(int a, double b, std::list<int>& l)
-    {
-        LOG_ALWAYS("(%zu) a:%i b:%g --", l.size(), a, b );
-    }
-
-    void String(std::string& s)
-    {
-        LOG_ALWAYS("s:%s", s.c_str() );
-    }
-
-    template<typename T>
-    void Template(T t)
-    {
-        LOG_ALWAYS("value: TODO", "");
-    }
-
-
-    static long double Factorial(unsigned long n,long double a = 1)
-    {
-        if( n == 0 ) return a;
-        return Factorial(n-1, a * n );
-    }
-
-    void CalcFactorial(unsigned long n)
-    {
-        LOG_FRAME(0,"n: %2lu value: %26lg",n, Factorial(n) );
-    }
-};
 
 
 
@@ -175,118 +74,6 @@ void t_function(T t)
 
 
 
-//---------------------------------------------------------------------------------------------------------------------
-//
-//
-//
-//
-class i_marshal_work
-{
-
-private:
-    typedef std::unique_ptr<ee5::i_marshaled_call> CallPtr;
-
-    virtual RC get_storage(size_t size,void** p)    = 0;
-    virtual RC enqueue_work(CallPtr&& p)            = 0;    
-
-//    static void* operator new(std::size_t) { return nullptr; }
-
-public:
-    // This turns non-scaler types into references in the function signature. Copy semantics
-    // can be extraordinarily expensive and while we need to make a copy of the values during the
-    // marshaling of the data, it would be "criminal" to make yet ANOTHER copy of the data that
-    // is sitting in the tuple that acts as storage.
-    //
-    template<typename Arg>
-    struct ref_val
-    {
-        typedef typename std::conditional<
-                /* if */    std::is_scalar<Arg>::value,
-                /* then */  Arg,
-                /* else */  typename std::add_lvalue_reference<Arg>::type
-                >::type value_type;
-    };
-
-
-    // Call a member function of a class in the context of a thread pool thread
-    // with zero or more arguments with rvalue semantics.
-    //
-    template<typename O, typename ...TArgs>
-    RC Async(O* pO, void (O::*pM)(typename ref_val<TArgs>::value_type...),TArgs&&...args)
-    {
-        typedef object_method_delegate<O,void,typename ref_val<TArgs>::value_type...> binder;
-        typedef marshaled_call<binder,typename std::remove_reference<TArgs>::type...> call_type;
-
-        CRR( enqueue_work( CallPtr( new call_type( binder(pO,pM), args... ) ) ) );
-
-        return s_ok();
-    }
-
-    // Call a member function of a class in the context of a thread pool thread
-    // with zero or more arguments that are constant lvalue types
-    //
-    template<typename O, typename ... TArgs>
-    RC Async(O* pO, void (O::*pM)(typename ref_val<TArgs>::value_type...),const TArgs&...args)
-    {
-        typedef object_method_delegate<O,void,typename ref_val<TArgs>::value_type...> binder;
-        typedef marshaled_call<binder,typename std::remove_reference<TArgs>::type...> call_type;
-
-        CRR( enqueue_work( CallPtr( new call_type( binder(pO,pM), args... ) ) ) );
-
-        return s_ok();
-    }
-
-    // Call any function or functor that can compile to a void(void) signature
-    //
-    template<typename TFunction>
-    RC Async( TFunction f )
-    {
-        typedef marshaled_call< std::function< void() > > void_void_call_type;
-
-        CRR( enqueue_work( CallPtr( new void_void_call_type(f) ) ) );
-
-        return s_ok();
-    }
-
-
-    // This is a little of a mess. In order to support lambda expressions
-    // We need to distinguish between the pointer to a member function and the first argument of the lambda.
-    // This has the "messed up" side effect that a lambda expression can not pass a pointer to a
-    // member function as the first argument.  This restriction is because the compiler won't be able to
-    // disambiguate between this use and the O*->Member(...) usage.
-    //
-    template<
-        typename    TFunction,  // Any expression that evaluates to a "plain" function call with at
-                                // least a single argument.
-        typename    TArg1,      // The first argument to allow for disabling selection
-        typename... TArgs,      // Zero or more additional arguments
-        typename =  typename    // This syntax sucks. "Attribute mark-up" ~could~ be better.
-            std::enable_if
-            <
-                (
-                    /* The function value must be a "class" that evaluates to a functor */
-                    std::is_class< typename std::remove_pointer<TFunction>::type>::value    ||
-                    /* or a function type. */
-                    std::is_function< typename std::remove_pointer<TFunction>::type>::value
-                )
-                && /* The first marshaled argument can not be a pointer to a member function of a class. */
-                (
-                    ! std::is_member_function_pointer<TArg1>::value
-                ),
-                TFunction 
-            >::type 
-    >
-    RC Async(TFunction f,TArg1 a,TArgs&&...args)
-    {
-        typedef std::function<void(TArg1,typename ref_val<TArgs>::value_type...)> function_type;
-        typedef marshaled_call<function_type,TArg1,typename std::remove_reference<TArgs>::type...> call_type;
-
-        CRR( enqueue_work( CallPtr( new call_type( f, a, args... ) ) ) );
-
-        return s_ok();
-    }
-
-};
 
 #include <array>
 #include <forward_list>
@@ -407,6 +194,59 @@ void Moink()
 
 
 
+#include "i_marshall_work.h"
+
+
+
+template <class T,typename H = void>
+struct pool_allocator
+{
+    typedef T               value_type;
+    typedef T*              pointer;
+    typedef const T*        const_pointer;
+    typedef T&              reference;
+    typedef const T&        const_reference;
+    typedef std::size_t     size_type;
+    typedef std::ptrdiff_t  difference_type;
+    
+    template<typename O> struct rebind { typedef pool_allocator<O> other; };
+    
+    pool_allocator(/*ctor args*/)
+    {
+    };
+    
+    pool_allocator(const pool_allocator&)
+    {
+    };
+    
+    template< class O > 
+    pool_allocator(const pool_allocator<O,H>& other)
+    {
+        int y =  sizeof(O);
+        y = 1;
+    };
+    
+    
+    template< class A, class... Args >
+    void construct( A* p, Args&&... args )
+    {
+        ::new( reinterpret_cast<void*>(p) ) A(std::forward<Args>(args)...);
+    }
+    
+    T* allocate(size_type n,const_pointer hint = 0)
+    { 
+        size_t s = sizeof(T);
+        
+//        printf("%lu : %s\n",s,typeid(T).name());
+        
+        return reinterpret_cast<T*>( malloc( n * sizeof(T) ) );
+    } 
+    void deallocate(T* p, size_type n) 
+    {
+        
+    };
+};
+
 
 
 
@@ -417,37 +257,93 @@ void Moink()
 //
 class TP : public i_marshal_work
 {
+   
 private:
-    typedef std::unique_ptr<ee5::i_marshaled_call> CallPtr;
-    typedef ee5::WorkThread<CallPtr>               work_thread;
-    typedef std::vector<work_thread>               thread_vector;
-    thread_vector   threads;
-    size_t          t_count = std::thread::hardware_concurrency();
-    size_t          x       = 0;
+    using mem_pool_t    = static_memory_pool<128,100000>;
+    using qitem_t       = std::shared_ptr<i_marshaled_call>;
+    using work_thread_t = ee5::WorkThread<qitem_t>;
+    using tvec_t        = std::vector<work_thread_t>;
+    
+    mem_pool_t  mem;
+    tvec_t      threads;
+    size_t      t_count = std::thread::hardware_concurrency() * 1;
+    size_t      x       = 0;
+    
+    struct deleter
+    {
+        mem_pool_t* pool;
+        
+        deleter() = delete;
+        deleter(mem_pool_t& p)      : pool(&p)      { }
+        deleter(const deleter& p)   : pool(p.pool)  { }
+        
+        void operator()(void* buffer) 
+        { 
+            reinterpret_cast<i_marshaled_call*>(buffer)->~i_marshaled_call();
+            pool->release( buffer ); 
+        }
+    };
+    
+    RC lock()
+    {
+        return s_ok();
+    }
+    
+    void unlock()
+    {
+        
+    }
 
     RC get_storage(size_t size,void** pp)
     {
-        CBREx( pp != nullptr, e_invalid_argument(2,"value must be non-null") );
-        CMA( *pp = calloc(size,1) );
+        if(size > mem_pool::max_item_size)
+        {
+            *pp = nullptr;
+        }
+        
+//         CBREx( size <= mem_pool::max_item_size, e_invalid_argument(2,"value must be non-null") );
+//         CBREx( pp != nullptr,                   e_invalid_argument(2,"value must be non-null") );
+        *pp = nullptr;
+        do
+        {
+            static std::atomic<size_t> c;
+            static std::atomic<size_t> m;
+            
+            *pp = mem.acquire();
 
+            if(!*pp)
+            {
+                std::this_thread::sleep_for(std::chrono::milliseconds(100));
+                m++;
+            }
+            else
+            {
+                c++;
+            }
+        }
+        while(!*pp);
+        
         return s_ok();
     }
 
-    RC enqueue_work(CallPtr&& p)
+    RC enqueue_work(i_marshaled_call* p)
     {
-        threads[x%t_count].Enqueue( std::move( p ) , nullptr);
-        ++x;
-        return s_ok();
+         threads[x%t_count].Enqueue( qitem_t( p, deleter(mem) ), nullptr);
+         ++x;
+         return s_ok();
     }
 
 public:
     TP()
     {
+        printf("t_count: %lu\n",t_count);
+        
         // Create the threads first...
         //
         for(size_t c = t_count; c ; --c)
         {
-            threads.push_back( work_thread( c, [](CallPtr& p){ p->Execute(); } ) );
+            threads.push_back( work_thread_t( c, [](qitem_t& p){ p->Execute(); } ) );
+            printf("+%lu\n",c);
         }
 
         // Start them.
@@ -468,6 +364,84 @@ public:
 };
 
 
+TP p;
+
+
+
+//-------------------------------------------------------------------------------------------------
+//
+//
+//
+//
+struct ThreadpoolTest
+{
+    ThreadpoolTest()
+    {
+    }
+    ~ThreadpoolTest()
+    {
+    }
+    
+    void NineArgs(int a, int b, int c, int d, int e, int f, int g, int h, int i)
+    {
+        LOG_ALWAYS("a:%i b:%i c:%i d:%i e:%i f:%i g:%i h:%i i:%i",a,b,c,d,e,f,g,h,i);
+        
+        assert(a == 1);
+        assert(b == 2);
+        assert(c == 3);
+        assert(d == 4);
+        assert(e == 5);
+        assert(f == 6);
+        assert(g == 7);
+        assert(h == 8);
+        assert(i == 9);
+    }
+    
+    void ScalarTypes(int a, double b,size_t c)
+    {
+        LOG_ALWAYS("a: %i b:%g c:%zu",a ,b ,c );
+    }
+    
+    template<typename C>
+    void TemplateRef(C& items)
+    {
+        LOG_ALWAYS("(%zu)--", items.size() );
+    }
+    
+    void ScalarAndReference(int a, double b, std::list<int>& l)
+    {
+        LOG_ALWAYS("(%zu) a:%i b:%g --", l.size(), a, b );
+    }
+    
+    void String(std::string& s)
+    {
+        LOG_ALWAYS("s:%s", s.c_str() );
+    }
+    
+    template<typename T>
+    void Template(T t)
+    {
+        LOG_ALWAYS("value: TODO", "");
+    }
+    
+    
+    static long double Factorial(unsigned long n,long double a = 1)
+    {
+        if( n == 0 ) return a;
+        return Factorial(n-1, a * n );
+    }
+    
+    void CalcFactorial(unsigned long n)
+    {
+        LOG_FRAME(0,"n: %2lu value: %26lg",n, Factorial(n) );
+        for(;n;n--)
+        {
+            p.Async( this, &ThreadpoolTest::CalcFactorial, n );
+        }
+    }
+};
+
+
 
 //---------------------------------------------------------------------------------------------------------------------
 //
@@ -480,23 +454,25 @@ RC FunctionTests()
     LOG_ALWAYS("%s","testing...");
 
     ThreadpoolTest  target;
-    TP              p;
     int             int_local       = 55555;
     double          double_local    = 55.555;
 
     Timer t;
 
-    // Factorial Work Product
-    //
-    for(size_t n=0;n<26;++n)
-    {
-        CRR( p.Async( &target, &ThreadpoolTest::CalcFactorial, n ) );
-    }
-
-
+    
     // Scalar Types
     //
     CRR( p.Async( &target, &ThreadpoolTest::ScalarTypes, 1, 11.1, 1000000000000000ul ) );
+    
+    
+    // Factorial Work Product
+    //
+//     for(size_t n=0;n<26;++n)
+//     {
+//         CRR( p.Async( &target, &ThreadpoolTest::CalcFactorial, n ) );
+//     }
+
+
 
 
     // Full 9 Argument Support
@@ -575,13 +551,13 @@ RC FunctionTests()
     // Lambda capture with three scalar arguments called locally
     // and queued later,
     //
-    auto q = [h,&cc](int a,double b, int c)
+    auto q = [&cc](int a,double b, int c)
     {
         long double ld = random() * b;
 
-        for(size_t i = 0;i < 10000;i++)
+        for(size_t i = 0;i < 1000;i++)
         {
-            ld += ThreadpoolTest::Factorial(25) * ThreadpoolTest::Factorial(25) * ThreadpoolTest::Factorial(25);
+            ld += ThreadpoolTest::Factorial(25);
         }
 
         // This should never happen, but the optimizer is too good
@@ -592,6 +568,9 @@ RC FunctionTests()
         {
             LOG_ALWAYS("ld: %20.20lg",ld);
         }
+        
+        std::this_thread::yield();//sleep_for(std::chrono::nanoseconds(1));
+        
 
         cc++; // The atomically incremented value
     };
@@ -640,7 +619,7 @@ RC FunctionTests()
 
     p.Shutdown();
 
-    assert( cc == 7777777 );
+//    assert( cc == 7777777 );
 
     LOG_ALWAYS("cc == %lu", cc.load() );
 
@@ -699,10 +678,7 @@ void App()
     LOG_ALWAYS("%s","互いに同胞の精神をもって行動しなければならない。");
     LOG_ALWAYS("%s","请以手足关系的精神相对待");
 
-    for(size_t y = 0;y < 10;++y)
-    {
-        LOG_ALWAYS("Hey %lu",y);
-    }
+    LOG_ALWAYS("%s","Almost done.");
 }
 
 
@@ -716,17 +692,18 @@ void App()
 //
 int main()
 { 
-   Moink();
-    
-   int iRet = 0;
-//    int iRet = ee5::Startup(0,nullptr);
-// 
-//     if( iRet == 0 )
-//     {
-//         App();
-// 
-//         ee5::Shutdown();
-//     }
+//   Moink();
+//   int iRet = 0;
+    int iRet = ee5::Startup(0,nullptr);
+
+    if( iRet == 0 )
+    {
+        App();
+        
+        LOG_ALWAYS("Goodbye...","");
+        
+        ee5::Shutdown();
+    }
 
 
     return iRet;

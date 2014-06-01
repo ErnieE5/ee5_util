@@ -28,7 +28,42 @@
 namespace ee5
 {
 
-
+    //---------------------------------------------------------------------------------------------------------------------
+    //
+    //
+    //
+    //
+    class Timer
+    {
+    private:
+        typedef std::chrono::time_point<std::chrono::high_resolution_clock> hrc_time_point;
+        hrc_time_point s;
+        
+    protected:
+        
+    public:
+        Timer()
+        {
+            s = std::chrono::high_resolution_clock::now();
+        }
+        
+        template< typename D = std::chrono::duration< float, std::micro > >
+        D Delta()
+        {
+            return std::chrono::high_resolution_clock::now() - s;
+        }
+        
+//         template<typename T = std::ostream,typename M = std::chrono::duration<float> >
+//         void PrintDelta(T& o = std::cout)
+//         {
+//             //        std::streamsize p = std::cout.precision(4);
+//             //        o << std::chrono::duration_cast<M>(Delta()).count() << std::endl;
+//             //        std::cout.precision(p);
+//         }
+    };
+    
+    
+    
 
 //---------------------------------------------------------------------------------------------------------------------
 //
@@ -70,6 +105,7 @@ public:
 
     void Chill(bool after = false)
     {
+        std::this_thread::yield();
         frame_lock _lock(mtx);
         cv.wait( _lock, [this]{ return event_set; } );
         event_set = after;
@@ -87,6 +123,7 @@ public:
     }
 };
 
+#include <unistd.h>
 
 
 //---------------------------------------------------------------------------------------------------------------------
@@ -118,6 +155,7 @@ private:
         {
             method( items.front() );
             items.pop();
+            //std::this_thread::yield();
         }
     }
 
@@ -137,8 +175,19 @@ private:
                     queue.pop();
                 }
             } );
+ 
 
-            Process(work_to_do);
+            {
+//                 Timer taft;
+//                 size_t s = work_to_do.size();
+                Process( work_to_do );
+//                 using mil = std::chrono::milliseconds;
+//                 auto milli = std::chrono::duration_cast<mil>(taft.Delta()).count();
+//                 if(milli > 1000)
+//                 {
+//                     LOG_ALWAYS("\n %lu : %6lu/%6lu : %3li ms",user_id,s,queue.size(),milli );
+//                 }
+            }
         }
 
         if( !abandon && queue.size() )

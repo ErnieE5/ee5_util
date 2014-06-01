@@ -64,7 +64,7 @@ const int cache_alignment_intel_x86_64 = 64;
 //  item_count: 
 //      The total number of items to reserve.
 //
-//  cache_alignment:
+//  align:
 //      The baseline alignment of each of the buffers "handed out" to the user of this
 //      routine. For Intel systems running Linux in 2014 the cache line size is 64 bytes. 
 //      For the "best" usage of memory you SHOULD keep item_size as close to a multiple 
@@ -75,7 +75,7 @@ const int cache_alignment_intel_x86_64 = 64;
 //      already be mapped.
 //  
 //
-template< int item_size, int item_count, int cache_alignment = cache_alignment_intel_x86_64 >
+template< int item_size, int item_count, int align = cache_alignment_intel_x86_64 >
 class static_memory_pool
 {
 private:
@@ -93,7 +93,7 @@ private:
         //
         union
         {
-            unsigned char data[item_size] __attribute__ ((aligned (cache_alignment)));
+            unsigned char data[item_size] __attribute__ ((aligned (align)));
             pool_buffer*  next;
         };
     };
@@ -159,6 +159,10 @@ private:
 
     
 public:
+    static const size_t max_item_size   = item_size;
+    static const size_t max_item_count  = item_count;
+    static const size_t cache_alignment = align;
+    
     // Constructor
     //    
     static_memory_pool()
@@ -306,7 +310,7 @@ public:
     {
         return unique_type<T>( acquire<T>(), pool_deleter(this) );
     }
-   
+    
 };
 
     
