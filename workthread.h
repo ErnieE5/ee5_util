@@ -38,30 +38,24 @@ namespace ee5
     class Timer
     {
     private:
-        typedef std::chrono::time_point<std::chrono::high_resolution_clock> hrc_time_point;
-        hrc_time_point s;
+        using clock         = std::chrono::high_resolution_clock;
+        using time_point    = std::chrono::time_point<clock>;
+        
+        time_point s;
 
     protected:
 
     public:
         Timer()
         {
-            s = std::chrono::high_resolution_clock::now();
+            s = clock::now();
         }
 
-        template< typename D = std::chrono::duration< float, std::micro > >
-        D Delta()
+        template<typename R = std::micro,typename T = float,typename D = std::chrono::duration< T, R > >
+        T Delta()
         {
-            return std::chrono::high_resolution_clock::now() - s;
+            return D(clock::now() - s).count();
         }
-
-//         template<typename T = std::ostream,typename M = std::chrono::duration<float> >
-//         void PrintDelta(T& o = std::cout)
-//         {
-//             //        std::streamsize p = std::cout.precision(4);
-//             //        o << std::chrono::duration_cast<M>(Delta()).count() << std::endl;
-//             //        std::cout.precision(p);
-//         }
     };
 
 
@@ -139,7 +133,7 @@ public:
 //
 //
 //
-template<typename L = spin_barrier,typename F = void (*)(),typename...TArgs>
+template<typename L,typename F,typename...TArgs>
 void framed_lock(L& _mtx,F _f,TArgs...args)
 {
     std::lock_guard<L> __lock(_mtx);
@@ -250,11 +244,10 @@ private:
                 Timer taft;
                 size_t s = work_to_do.size();
                 Process( work_to_do );
-                using mil = std::chrono::milliseconds;
-                auto milli = std::chrono::duration_cast<mil>(taft.Delta()).count();
+                auto milli = taft.Delta<std::milli>();
                 if(milli > 1000)
                 {
-                    LOG_UNAME("T", "%lu : %6lu/%6lu : %3li ms",user_id,s,queue.size(),milli );
+                    LOG_UNAME("Thread", "%lu : %6lu/%6lu : %3.2f ms",user_id,s,queue.size(),milli );
                 }
             }
         }

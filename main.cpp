@@ -345,7 +345,7 @@ private:
 public:
     TP()
     {
-        printf("t_count: %lu\n",t_count);
+//        printf("t_count: %lu\n",t_count);
 
         // Create the threads first...
         //
@@ -448,13 +448,25 @@ struct ThreadpoolTest
         return Factorial(n-1, a * n );
     }
 
+    std::mutex  lock;
+    long double total = 0;
+    
     void CalcFactorial(unsigned long n)
     {
-        LOG_FRAME(0,"n: %2lu value: %26lg",n, Factorial(n) );
-        for(;n;n--)
+        Timer taft;
+        long double f = Factorial(n);
+        
+        for(unsigned long h = n;h > 2;h--)
         {
-            p.Async( this, &ThreadpoolTest::CalcFactorial, n );
+            p.Async( [&](unsigned long h) 
+            {  
+                long double v = Factorial(h);
+                framed_lock( lock, [&] { total+=v; } );
+            }, h );
         }
+        
+        
+        LOG_ALWAYS("n: %2lu value: %26.0Lf %5.0f us",n, Factorial(n),taft.Delta<std::micro>() );
     }
 };
 
@@ -484,13 +496,10 @@ RC FunctionTests()
 
     // Factorial Work Product
     //
-//     for(size_t n=0;n<26;++n)
-//     {
-//         CRR( p.Async( &target, &ThreadpoolTest::CalcFactorial, n ) );
-//     }
-
-
-
+    for(size_t n=0;n<26;++n)
+    {
+        CRR( p.Async( &target, &ThreadpoolTest::CalcFactorial, n ) );
+    }
 
     // Full 9 Argument Support
     //
@@ -616,13 +625,13 @@ RC FunctionTests()
     LOG_ALWAYS("Phase Two Done.","");
 
 
-    std::mutex      lock;
-    std::list<int>  complete;
+    std::mutex          lock;
+    std::list<size_t>   complete;
     auto join = [&lock,&complete](std::vector<int> add)
     {
         framed_lock( lock, [&add,&complete]()
         {
-            complete.insert(complete.end(),add.begin(),add.end());
+            complete.push_back( add.size() );
             LOG_UNAME("join","size: %10lu add: %10lu",complete.size(),add.size());
         });
     };
@@ -659,8 +668,12 @@ RC FunctionTests()
         } ) );
     }
 
-    std::this_thread::sleep_for(std::chrono::seconds(60));
+    printf("d00d!\n");
+    
+    std::this_thread::sleep_for(std::chrono::seconds(10));
 
+    printf("d00d!\n");
+    
     p.Shutdown();
 
 //    assert( cc == 7777777 );
@@ -716,8 +729,7 @@ void App()
     Timer   taft;
 
     FunctionTests();
-    LOG_ALWAYS("Elapsed Time: %lg seconds.",
-               std::chrono::duration_cast<std::chrono::duration<float>>(taft.Delta()).count() );
+    LOG_ALWAYS("Elapsed Time: %lg seconds.",taft.Delta<std::ratio<1>>() );
 
     LOG_ALWAYS("%s","互いに同胞の精神をもって行動しなければならない。");
     LOG_ALWAYS("%s","请以手足关系的精神相对待");

@@ -59,8 +59,6 @@ private:
             
         return rc;
     }
-        
-public:
 
     template< typename B, typename M, typename ...TArgs >
     RC __enqueue(B&& binder,TArgs&&...args)
@@ -80,6 +78,10 @@ public:
         
         return rc;
     }
+    
+    
+public:
+
     
     
     // Call a member function of a class in the context of a thread pool thread
@@ -104,12 +106,6 @@ public:
         using method_t = marshaled_call<binder_t,typename std::remove_reference<TArgs>::type...>;
 
         return __enqueue<binder_t,method_t>( binder_t(pO,pM), args... );
-//         typedef object_method_delegate<O,void,typename ref_val<TArgs>::value_type...> binder;
-//         typedef marshaled_call<binder,typename std::remove_reference<TArgs>::type...> call_type;
-//         
-//         CRR( enqueue_work( CallPtr( new call_type( binder(pO,pM), args... ) ) ) );
-//         
-//         return s_ok();
     }
     
     // Call any function or functor that can compile to a void(void) signature
@@ -117,28 +113,25 @@ public:
     template<typename TFunction>
     RC Async( TFunction f )
     {
+        using binder_t = std::function< void() >;
         using method_t = marshaled_call< std::function< void() > >;
 
-        method_t* call = nullptr;
+        return __enqueue<binder_t,method_t>( f );        
         
-        RC rc = __lock_get<method_t>(&call);
-        
-        if( rc == s_ok() )
-        {
-            new(call) method_t( f );
-            
-            rc = enqueue_work(call);
-            
-            unlock();
-        }
-        
-        return rc;
-/*        
-        
-        
-        CRR( enqueue_work( CallPtr( new void_void_call_type(f) ) ) );
-        
-        return s_ok();*/
+//         method_t* call = nullptr;
+//         
+//         RC rc = __lock_get<method_t>(&call);
+//         
+//         if( rc == s_ok() )
+//         {
+//             new(call) method_t( f );
+//             
+//             rc = enqueue_work(call);
+//             
+//             unlock();
+//         }
+//         
+//         return rc;
     }
     
     
@@ -175,10 +168,6 @@ public:
         using method_t = marshaled_call<binder_t,TArg1,typename std::remove_reference<TArgs>::type...>;
         
         return __enqueue<binder_t,method_t>( f, a, args... );
-        
-        //CRR( enqueue_work( CallPtr( new call_type( f, a, args... ) ) ) );
-        
-        //return s_ok();
     }
     
 };
