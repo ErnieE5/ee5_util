@@ -1,7 +1,7 @@
 //-------------------------------------------------------------------------------------------------
 // Copyright (C) 2014 Ernest R. Ewert
-// 
-// Feel free to use this as you see fit. 
+//
+// Feel free to use this as you see fit.
 // I ask that you keep my name with the code.
 //
 // THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
@@ -92,13 +92,13 @@ mem_pool mem;
 void Moink()
 {
     std::vector<int*> items;
-    
+
     int k = 1;
-    
+
     for( int* pi = mem.acquire<int>(); pi ; pi = mem.acquire<int>() )
     {
         *pi = k++;
-        
+
         items.push_back(pi);
     }
 
@@ -106,7 +106,7 @@ void Moink()
     {
         mem.release(r);
     }
-    
+
     assert( mem.release(&k) == false );
 
     struct pod
@@ -123,9 +123,9 @@ void Moink()
         int      v = 0;
         double   d = .1;
         unsigned u = 0x10;
-        
+
         auto f = mem.acquire_unique<pod>();
-        
+
         for( pooled_pod pp = mem.acquire_unique<pod>() ; pp ; pp = mem.acquire_unique<pod>() )
         {
             pp->x = v++;
@@ -140,20 +140,20 @@ void Moink()
             printf(" %2i %2u %2g\n",g->x,g->y,g->z);
         }
     }
-    
+
 }
 
 
 //         typedef static_memory_pool<64,10>   mem_pool;
 //         using pooled_int = mem_pool::unique_type<int>;
-// 
-//         
-//         
+//
+//
+//
 //         mem_pool pool;
-// 
+//
 //         auto a          = pool.acquire_unique<int>();
 //         *a = 15;
-//         
+//
 //         pooled_int b    = pool.acquire_unique<int>();
 //         *b = 30;
 
@@ -162,31 +162,31 @@ void Moink()
 //         using foo = mem_pool::unique_type<unsigned>;
 //         using get = foo (mem_pool::*)();
 //         get acc = &mem_pool::acquire_unique<unsigned>;
-// 
+//
 //         if( std::is_member_function_pointer<get>::value )
 //         {
     //             printf("dude!\n");
     //         }
-    //         
+    //
     //         auto ui = mem.acquire_unique<unsigned>();
-    //         
+    //
     //         mem_pool::unique_type<unsigned> q = mem.acquire_unique<unsigned>();
-    //         
+    //
     //         foo x = mem.acquire_unique<unsigned>();
     //         foo y = (mem.*acc)();
-    //         
-    // 
+    //
+    //
     //         *q  = 15;
     //         *ui = 8;
-    
+
     //        printf("a: %u\nb: %u\n",*a,*b);
-    
-    
-    
+
+
+
     //         std::shared_ptr<int> sh = mem.acquire_shared<int>();
-    // 
+    //
     //         *sh = 22;
-    
+
 
 
 
@@ -208,42 +208,42 @@ struct pool_allocator
     typedef const T&        const_reference;
     typedef std::size_t     size_type;
     typedef std::ptrdiff_t  difference_type;
-    
+
     template<typename O> struct rebind { typedef pool_allocator<O> other; };
-    
+
     pool_allocator(/*ctor args*/)
     {
     };
-    
+
     pool_allocator(const pool_allocator&)
     {
     };
-    
-    template< class O > 
+
+    template< class O >
     pool_allocator(const pool_allocator<O,H>& other)
     {
         int y =  sizeof(O);
         y = 1;
     };
-    
-    
+
+
     template< class A, class... Args >
     void construct( A* p, Args&&... args )
     {
         ::new( reinterpret_cast<void*>(p) ) A(std::forward<Args>(args)...);
     }
-    
+
     T* allocate(size_type n,const_pointer hint = 0)
-    { 
-        size_t s = sizeof(T);
-        
-//        printf("%lu : %s\n",s,typeid(T).name());
-        
-        return reinterpret_cast<T*>( malloc( n * sizeof(T) ) );
-    } 
-    void deallocate(T* p, size_type n) 
     {
-        
+        size_t s = sizeof(T);
+
+//        printf("%lu : %s\n",s,typeid(T).name());
+
+        return reinterpret_cast<T*>( malloc( n * sizeof(T) ) );
+    }
+    void deallocate(T* p, size_type n)
+    {
+
     };
 };
 
@@ -257,41 +257,49 @@ struct pool_allocator
 //
 class TP : public i_marshal_work
 {
-   
+
 private:
     using mem_pool_t    = static_memory_pool<128,100000>;
     using qitem_t       = std::shared_ptr<i_marshaled_call>;
     using work_thread_t = ee5::WorkThread<qitem_t>;
     using tvec_t        = std::vector<work_thread_t>;
-    
-    mem_pool_t  mem;
-    tvec_t      threads;
-    size_t      t_count = std::thread::hardware_concurrency() * 1;
-    size_t      x       = 0;
-    
+
+    //using framed_lock_t = framed_lock<spin_mutex>;
+
+    spin_mutex          termination_;
+
+    std::atomic_flag    active;
+
+
+    mem_pool_t          mem;
+    tvec_t              threads;
+    size_t              t_count = std::thread::hardware_concurrency() * 1;
+    std::atomic_size_t  x;
+
     struct deleter
     {
         mem_pool_t* pool;
-        
+
         deleter() = delete;
         deleter(mem_pool_t& p)      : pool(&p)      { }
         deleter(const deleter& p)   : pool(p.pool)  { }
-        
-        void operator()(void* buffer) 
-        { 
+
+        void operator()(void* buffer)
+        {
             reinterpret_cast<i_marshaled_call*>(buffer)->~i_marshaled_call();
-            pool->release( buffer ); 
+            pool->release( buffer );
         }
     };
-    
+
     RC lock()
     {
+//        barrier.lock();
         return s_ok();
     }
-    
+
     void unlock()
     {
-        
+//        barrier.unlock();
     }
 
     RC get_storage(size_t size,void** pp)
@@ -300,7 +308,7 @@ private:
         {
             *pp = nullptr;
         }
-        
+
 //         CBREx( size <= mem_pool::max_item_size, e_invalid_argument(2,"value must be non-null") );
 //         CBREx( pp != nullptr,                   e_invalid_argument(2,"value must be non-null") );
         *pp = nullptr;
@@ -308,12 +316,13 @@ private:
         {
             static std::atomic<size_t> c;
             static std::atomic<size_t> m;
-            
+
             *pp = mem.acquire();
 
             if(!*pp)
             {
-                std::this_thread::sleep_for(std::chrono::milliseconds(100));
+                //std::this_thread::sleep_for(std::chrono::milliseconds(1));
+                std::this_thread::yield();
                 m++;
             }
             else
@@ -322,7 +331,7 @@ private:
             }
         }
         while(!*pp);
-        
+
         return s_ok();
     }
 
@@ -337,7 +346,7 @@ public:
     TP()
     {
         printf("t_count: %lu\n",t_count);
-        
+
         // Create the threads first...
         //
         for(size_t c = t_count; c ; --c)
@@ -353,12 +362,20 @@ public:
         }
     }
 
-    void Shutdown()
+    void Shutdown(bool abandon = false)
     {
         for(auto& k : threads)
         {
             k.Quit();
         }
+
+        size_t s = 0;
+        for(auto& k : threads)
+        {
+            s += k.Pending();
+        }
+
+        printf("-%lu\n",s);
     }
 
 };
@@ -381,11 +398,11 @@ struct ThreadpoolTest
     ~ThreadpoolTest()
     {
     }
-    
+
     void NineArgs(int a, int b, int c, int d, int e, int f, int g, int h, int i)
     {
         LOG_ALWAYS("a:%i b:%i c:%i d:%i e:%i f:%i g:%i h:%i i:%i",a,b,c,d,e,f,g,h,i);
-        
+
         assert(a == 1);
         assert(b == 2);
         assert(c == 3);
@@ -396,41 +413,41 @@ struct ThreadpoolTest
         assert(h == 8);
         assert(i == 9);
     }
-    
+
     void ScalarTypes(int a, double b,size_t c)
     {
         LOG_ALWAYS("a: %i b:%g c:%zu",a ,b ,c );
     }
-    
+
     template<typename C>
     void TemplateRef(C& items)
     {
         LOG_ALWAYS("(%zu)--", items.size() );
     }
-    
+
     void ScalarAndReference(int a, double b, std::list<int>& l)
     {
         LOG_ALWAYS("(%zu) a:%i b:%g --", l.size(), a, b );
     }
-    
+
     void String(std::string& s)
     {
         LOG_ALWAYS("s:%s", s.c_str() );
     }
-    
+
     template<typename T>
     void Template(T t)
     {
         LOG_ALWAYS("value: TODO", "");
     }
-    
-    
+
+
     static long double Factorial(unsigned long n,long double a = 1)
     {
         if( n == 0 ) return a;
         return Factorial(n-1, a * n );
     }
-    
+
     void CalcFactorial(unsigned long n)
     {
         LOG_FRAME(0,"n: %2lu value: %26lg",n, Factorial(n) );
@@ -459,12 +476,12 @@ RC FunctionTests()
 
     Timer t;
 
-    
+
     // Scalar Types
     //
     CRR( p.Async( &target, &ThreadpoolTest::ScalarTypes, 1, 11.1, 1000000000000000ul ) );
-    
-    
+
+
     // Factorial Work Product
     //
 //     for(size_t n=0;n<26;++n)
@@ -526,7 +543,7 @@ RC FunctionTests()
     {
         CRR( p.Async( [h]()
         {
-            LOG_ALWAYS("[h]:%i", h );
+            LOG_UNAME("Lambda [h]()","[h]:%i", h );
         } ) );
         ++h;
     }
@@ -566,11 +583,11 @@ RC FunctionTests()
         //
         if( ld == 0 )
         {
-            LOG_ALWAYS("ld: %20.20lg",ld);
+            LOG_UNAME("Lambda q","ld: %20.20lg",ld);
         }
-        
-        std::this_thread::yield();//sleep_for(std::chrono::nanoseconds(1));
-        
+
+        //std::this_thread::yield();//sleep_for(std::chrono::nanoseconds(1));
+
 
         cc++; // The atomically incremented value
     };
@@ -581,7 +598,7 @@ RC FunctionTests()
     //
     CRR( p.Async( [h](int a,double b, int c)
     {
-        LOG_ALWAYS("[h]:%i a:%i b:%g c:%i", h, a, b, c );
+        LOG_UNAME("Lambda [h](int a,double b, int c)", "[h]:%i a:%i b:%g c:%i", h, a, b, c );
     }, 1 ,1.1, 1 ) );
 
     CRR( p.Async( q, 2, 2.2, 2 ) );
@@ -598,24 +615,51 @@ RC FunctionTests()
     }
     LOG_ALWAYS("Phase Two Done.","");
 
+
+    std::mutex      lock;
+    std::list<int>  complete;
+    auto join = [&lock,&complete](std::vector<int> add)
+    {
+        framed_lock( lock, [&add,&complete]()
+        {
+            complete.insert(complete.end(),add.begin(),add.end());
+            LOG_UNAME("join","size: %10lu add: %10lu",complete.size(),add.size());
+        });
+    };
+
     // This test "adds" more time by creating a large amount of work
     // by doing "heap stuff" on a number of threads.
     //
     for(unsigned long long size = 1; size < 1000000000; size *= 10)
     {
-        CRR( p.Async( [size]
+        CRR( p.Async( [size,&join]
         {
             typedef std::chrono::high_resolution_clock      HRC;
             typedef std::chrono::duration<float,std::milli> ms;
 
             auto start = HRC::now();
 
-            std::vector<int> v( size, 42 );
+            std::vector<int> v( size );
 
-            LOG_ALWAYS("Items %11lu, Time: % 12.6f ms", size,
-                       std::chrono::duration_cast<ms>( HRC::now() - start ).count() );
+            int* addr = v.data();
+
+            p.Async( [&join](std::vector<int> v1)
+            {
+                auto start = HRC::now();
+                std::generate(v1.begin(),v1.end(), []{ return random(); });
+                LOG_UNAME("inner Lambda","%lp Items %11lu, Time: % 12.6f ms", v1.data(),
+                            v1.size(),std::chrono::duration_cast<ms>( HRC::now() - start ).count() );
+
+                p.Async( join, std::move(v1) );
+            },
+            std::move(v) );
+
+            LOG_UNAME("outer Lambda","%lp Items %11lu, Time: % 12.6f ms %lu", addr,
+                        size,std::chrono::duration_cast<ms>( HRC::now() - start ).count(), v.size() );
         } ) );
     }
+
+    std::this_thread::sleep_for(std::chrono::seconds(60));
 
     p.Shutdown();
 
@@ -668,7 +712,7 @@ void App()
         LOG_FRAME(0,"Embedded frame..","");
         LOG_ALWAYS("互いに同胞の精神を%s","もって行動しなければならない。");
     }
-    
+
     Timer   taft;
 
     FunctionTests();
@@ -691,7 +735,7 @@ void App()
 //
 //
 int main()
-{ 
+{
 //   Moink();
 //   int iRet = 0;
     int iRet = ee5::Startup(0,nullptr);
@@ -699,9 +743,9 @@ int main()
     if( iRet == 0 )
     {
         App();
-        
+
         LOG_ALWAYS("Goodbye...","");
-        
+
         ee5::Shutdown();
     }
 

@@ -1,7 +1,7 @@
 //-------------------------------------------------------------------------------------------------
 // Copyright (C) 2014 Ernest R. Ewert
-// 
-// Feel free to use this as you see fit. 
+//
+// Feel free to use this as you see fit.
 // I ask that you keep my name with the code.
 //
 // THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
@@ -21,8 +21,10 @@
 #include <condition_variable>
 #include <memory>
 #include <mutex>
+#include <atomic>
 #include <queue>
 #include <thread>
+#include <cassert>
 
 
 namespace ee5
@@ -38,21 +40,21 @@ namespace ee5
     private:
         typedef std::chrono::time_point<std::chrono::high_resolution_clock> hrc_time_point;
         hrc_time_point s;
-        
+
     protected:
-        
+
     public:
         Timer()
         {
             s = std::chrono::high_resolution_clock::now();
         }
-        
+
         template< typename D = std::chrono::duration< float, std::micro > >
         D Delta()
         {
             return std::chrono::high_resolution_clock::now() - s;
         }
-        
+
 //         template<typename T = std::ostream,typename M = std::chrono::duration<float> >
 //         void PrintDelta(T& o = std::cout)
 //         {
@@ -61,20 +63,87 @@ namespace ee5
 //             //        std::cout.precision(p);
 //         }
     };
-    
-    
-    
+
+
 
 //---------------------------------------------------------------------------------------------------------------------
 //
 //
 //
 //
-template<typename F,typename L = std::mutex>
-void framed_lock(L& _mtx,F _f)
+class spin_barrier
 {
-    std::unique_lock<L> __lock(_mtx);
-    _f();
+    std::atomic_flag barrier = ATOMIC_FLAG_INIT;
+
+public:
+    spin_barrier() {}
+    spin_barrier(const spin_barrier&) = delete;
+
+    void lock()
+    {
+        while( barrier.test_and_set( std::memory_order_acquire ) );
+    }
+
+    void unlock()
+    {
+        barrier.clear( std::memory_order_release );
+    }
+
+};
+
+class spin_mutex
+{
+    static constexpr std::memory_order release = std::memory_order_release;
+    static constexpr std::memory_order relaxed = std::memory_order_relaxed;
+    static constexpr std::memory_order acquire = std::memory_order_acquire;
+
+    std::atomic_bool barrier;
+
+public:
+    spin_mutex()
+    {
+    }
+
+    void lock()
+    {
+        bool expected = false;
+        while( barrier.compare_exchange_weak( expected, true, acquire, relaxed ))
+        {
+            expected = false;
+        }
+    }
+
+    void unlock()
+    {
+        bool expected = true;
+        while( ! barrier.compare_exchange_strong( expected, false, release ) )
+        {
+            // You are breaking the contract if this assert fires!
+            assert( false );
+            expected = true;
+        }
+    }
+
+    bool try_lock()
+    {
+        bool expected = false;
+        return barrier.compare_exchange_strong( expected, true, acquire, relaxed );
+    }
+
+};
+
+
+
+//---------------------------------------------------------------------------------------------------------------------
+//
+//
+//
+//
+template<typename L = spin_barrier,typename F = void (*)(),typename...TArgs>
+void framed_lock(L& _mtx,F _f,TArgs...args)
+{
+    std::lock_guard<L> __lock(_mtx);
+    return _f(args...);
 }
 
 
@@ -87,7 +156,7 @@ void framed_lock(L& _mtx,F _f)
 class ThreadEvent
 {
 private:
-    typedef std::unique_lock<std::mutex>    frame_lock;
+    using frame_lock = std::unique_lock<std::mutex>;
 
     std::mutex              mtx;
     std::condition_variable cv;
@@ -175,20 +244,22 @@ private:
                     queue.pop();
                 }
             } );
- 
+
 
             {
-//                 Timer taft;
-//                 size_t s = work_to_do.size();
+                Timer taft;
+                size_t s = work_to_do.size();
                 Process( work_to_do );
-//                 using mil = std::chrono::milliseconds;
-//                 auto milli = std::chrono::duration_cast<mil>(taft.Delta()).count();
-//                 if(milli > 1000)
-//                 {
-//                     LOG_ALWAYS("\n %lu : %6lu/%6lu : %3li ms",user_id,s,queue.size(),milli );
-//                 }
+                using mil = std::chrono::milliseconds;
+                auto milli = std::chrono::duration_cast<mil>(taft.Delta()).count();
+                if(milli > 1000)
+                {
+                    LOG_UNAME("T", "%lu : %6lu/%6lu : %3li ms",user_id,s,queue.size(),milli );
+                }
             }
         }
+
+
 
         if( !abandon && queue.size() )
         {
@@ -218,6 +289,12 @@ public:
     void Shutdown()
     {
         Quit();
+    }
+
+    size_t Pending()
+    {
+        frame_lock _lock(data_lock);
+        return queue.size();
     }
 
     void Quit(bool join = true)
