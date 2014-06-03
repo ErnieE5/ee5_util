@@ -35,12 +35,13 @@ namespace ee5
     //
     //
     //
+    template<typename T = float>
     class Timer
     {
     private:
         using clock         = std::chrono::high_resolution_clock;
         using time_point    = std::chrono::time_point<clock>;
-        
+
         time_point s;
 
     protected:
@@ -51,7 +52,7 @@ namespace ee5
             s = clock::now();
         }
 
-        template<typename R = std::micro,typename T = float,typename D = std::chrono::duration< T, R > >
+        template<typename R = std::micro,typename D = std::chrono::duration< T, R > >
         T Delta()
         {
             return D(clock::now() - s).count();
@@ -96,12 +97,13 @@ class spin_mutex
 public:
     spin_mutex()
     {
+        barrier = false;
     }
 
     void lock()
     {
         bool expected = false;
-        while( barrier.compare_exchange_weak( expected, true, acquire, relaxed ))
+        while( ! barrier.compare_exchange_strong( expected, true, acquire, relaxed ) )
         {
             expected = false;
         }
@@ -127,6 +129,103 @@ public:
 };
 
 
+struct is_64_bit
+{
+    static const bool value = sizeof(void*) == sizeof(uint64_t);
+
+    using  value_type = uint_fast64_t;
+
+    static constexpr value_type exclusive_addend    = 0x0001000000000000;
+    static constexpr value_type maximum_shared      = 0x000000FFFFFFFFFF;
+};
+
+struct is_32_bit
+{
+   static const bool value = sizeof(void*) == sizeof(uint32_t);
+
+    using  value_type = uint_fast64_t;
+
+    static constexpr value_type exclusive_addend    = 0x00100000;
+    static constexpr value_type maximum_shared      = 0x0000FFFF;
+};
+
+
+template<typename storage_traits = typename std::conditional<is_64_bit::value,is_64_bit,is_32_bit>::type >
+class spin_shared_mutex
+{
+private:
+    static constexpr std::memory_order release = std::memory_order_release;
+    static constexpr std::memory_order relaxed = std::memory_order_relaxed;
+    static constexpr std::memory_order acquire = std::memory_order_acquire;
+
+    using storage_t = typename storage_traits::value_type;
+
+    static constexpr storage_t exclusive_addend  = storage_traits::exclusive_addend;
+    static constexpr storage_t maximum_shared    = storage_traits::maximum_shared;
+
+    std::atomic<storage_t>  barrier;
+
+public:
+    spin_shared_mutex()
+    {
+        barrier = 0;
+    }
+
+    void lock()
+    {
+        while( ( barrier.fetch_add(exclusive_addend) & exclusive_addend ) != exclusive_addend )
+        {
+            barrier.fetch_sub(exclusive_addend);
+        }
+
+        while( ( barrier.load() & ~exclusive_addend ) > 0 );
+    }
+
+    void unlock()
+    {
+        barrier.fetch_sub(exclusive_addend);
+    }
+
+    bool try_lock()
+    {
+        bool owned = barrier.fetch_add(exclusive_addend) == exclusive_addend;
+
+        if( !owned )
+        {
+            barrier.fetch_sub(exclusive_addend);
+        }
+
+        return owned;
+    }
+
+    void lock_shared()
+    {
+        while( barrier.fetch_add(1) > maximum_shared )
+        {
+            barrier.fetch_sub(1);
+        }
+    }
+
+    void unlock_shared()
+    {
+        barrier.fetch_sub(1);
+    }
+
+    bool try_lock_shared()
+    {
+        bool owned = (barrier.fetch_add(1) <= maximum_shared);
+
+        if(!owned)
+        {
+            barrier.fetch_sub(1);
+        }
+
+        return owned;
+    }
+
+};
+
+
 
 //---------------------------------------------------------------------------------------------------------------------
 //
@@ -136,7 +235,8 @@ public:
 template<typename L,typename F,typename...TArgs>
 void framed_lock(L& _mtx,F _f,TArgs...args)
 {
-    std::lock_guard<L> __lock(_mtx);
+    //std::lock_guard<L> __lock(_mtx);
+    std::unique_lock<L> __lock(_mtx);
     return _f(args...);
 }
 
@@ -241,7 +341,7 @@ private:
 
 
             {
-                Timer taft;
+                Timer<> taft;
                 size_t s = work_to_do.size();
                 Process( work_to_do );
                 auto milli = taft.Delta<std::milli>();

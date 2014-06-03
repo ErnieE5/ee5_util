@@ -448,24 +448,27 @@ struct ThreadpoolTest
         return Factorial(n-1, a * n );
     }
 
-    std::mutex  lock;
+    std::mutex  lock __attribute__ ((aligned (64)));
+
+    std::array<int,64> g;
+
     long double total = 0;
-    
+
     void CalcFactorial(unsigned long n)
     {
-        Timer taft;
+        Timer<> taft;
         long double f = Factorial(n);
-        
+
         for(unsigned long h = n;h > 2;h--)
         {
-            p.Async( [&](unsigned long h) 
-            {  
+            p.Async( [&](unsigned long h)
+            {
                 long double v = Factorial(h);
                 framed_lock( lock, [&] { total+=v; } );
             }, h );
         }
-        
-        
+
+
         LOG_ALWAYS("n: %2lu value: %26.0Lf %5.0f us",n, Factorial(n),taft.Delta<std::micro>() );
     }
 };
@@ -486,7 +489,7 @@ RC FunctionTests()
     int             int_local       = 55555;
     double          double_local    = 55.555;
 
-    Timer t;
+    Timer<> t;
 
 
     // Scalar Types
@@ -624,16 +627,24 @@ RC FunctionTests()
     }
     LOG_ALWAYS("Phase Two Done.","");
 
+    //std::array<int,64> foo;
 
-    std::mutex          lock;
+    spin_mutex          lock;
+    //spin_barrier        lock  __attribute__ ((aligned (64)));
+    //std::mutex          lock;
+
+    //std::array<int,64> bar;
+
     std::list<size_t>   complete;
     auto join = [&lock,&complete](std::vector<int> add)
     {
+        Timer<> x;
         framed_lock( lock, [&add,&complete]()
         {
             complete.push_back( add.size() );
             LOG_UNAME("join","size: %10lu add: %10lu",complete.size(),add.size());
         });
+        LOG_UNAME("Elapsed Time mutex","%10.0lf us",x.Delta());
     };
 
     // This test "adds" more time by creating a large amount of work
@@ -643,37 +654,31 @@ RC FunctionTests()
     {
         CRR( p.Async( [size,&join]
         {
-            typedef std::chrono::high_resolution_clock      HRC;
-            typedef std::chrono::duration<float,std::milli> ms;
-
-            auto start = HRC::now();
+            Timer<double> t;
 
             std::vector<int> v( size );
 
             int* addr = v.data();
 
-            p.Async( [&join](std::vector<int> v1)
+            p.Async( [&](std::vector<int> v1)
             {
-                auto start = HRC::now();
+                Timer<double> t;
                 std::generate(v1.begin(),v1.end(), []{ return random(); });
-                LOG_UNAME("inner Lambda","%lp Items %11lu, Time: % 12.6f ms", v1.data(),
-                            v1.size(),std::chrono::duration_cast<ms>( HRC::now() - start ).count() );
+                LOG_UNAME("fart ","0x%.16lx Items %11lu, Time: %12.0lf us inner", v1.data(),
+                            v1.size(),t.Delta());
 
                 p.Async( join, std::move(v1) );
             },
             std::move(v) );
 
-            LOG_UNAME("outer Lambda","%lp Items %11lu, Time: % 12.6f ms %lu", addr,
-                        size,std::chrono::duration_cast<ms>( HRC::now() - start ).count(), v.size() );
+            LOG_UNAME("fart ","0x%.16lx Items %11lu, Time: %12.0lf us outer", addr, v.size(), t.Delta() );
         } ) );
     }
 
-    printf("d00d!\n");
-    
-    std::this_thread::sleep_for(std::chrono::seconds(10));
+    std::this_thread::sleep_for(std::chrono::seconds(1));
 
     printf("d00d!\n");
-    
+
     p.Shutdown();
 
 //    assert( cc == 7777777 );
@@ -726,7 +731,7 @@ void App()
         LOG_ALWAYS("互いに同胞の精神を%s","もって行動しなければならない。");
     }
 
-    Timer   taft;
+    Timer<>   taft;
 
     FunctionTests();
     LOG_ALWAYS("Elapsed Time: %lg seconds.",taft.Delta<std::ratio<1>>() );
