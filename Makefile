@@ -20,7 +20,7 @@ WARNINGS:=\
 SYMBOLS=-g
 
 FARGUMENTS:= \
-	no-rtti \
+#	no-rtti \
 	no-exceptions
 
 LIBRARY_PATHS:=\

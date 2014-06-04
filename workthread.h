@@ -30,34 +30,56 @@
 namespace ee5
 {
 
-    //---------------------------------------------------------------------------------------------------------------------
-    //
-    //
-    //
-    //
-    template<typename T = float>
-    class Timer
+//---------------------------------------------------------------------------------------------------------------------
+//
+//
+//
+//
+template<typename T = float,typename C = std::chrono::high_resolution_clock>
+class timer
+{
+private:
+    std::chrono::time_point<C> start;
+
+public:
+    timer()
     {
-    private:
-        using clock         = std::chrono::high_resolution_clock;
-        using time_point    = std::chrono::time_point<clock>;
+        start = C::now();
+    }
 
-        time_point s;
+    template<typename R = std::micro,typename D = std::chrono::duration< T, R > >
+    T delta()
+    {
+        return D(C::now() - start).count();
+    }
+};
 
-    protected:
 
-    public:
-        Timer()
-        {
-            s = clock::now();
-        }
+// class frame_timer
+// {
+// private:
+//     template< typename F, typename ...TArgs >
+//     class frame_marker
+//     {
+//     private:
+//         std::function<F(TArgs...)> doit;
+//     public:
+//         frame_marker(F f,TArgs... args) : doit(f,...args){}
+//         ~frame_marker()
+//         {
+//             
+//         }
+//     };
+//     
+//     
+// protected:
+// public:
+//     frame_timer(
+//         
+// };
+// 
+// template<typename F,typename ...TArgs>
 
-        template<typename R = std::micro,typename D = std::chrono::duration< T, R > >
-        T Delta()
-        {
-            return D(clock::now() - s).count();
-        }
-    };
 
 
 
@@ -173,12 +195,12 @@ public:
 
     void lock()
     {
-        while( ( barrier.fetch_add(exclusive_addend) & exclusive_addend ) != exclusive_addend )
+        while( ( barrier.fetch_add(exclusive_addend,release) & exclusive_addend ) != 0 )
         {
             barrier.fetch_sub(exclusive_addend);
         }
 
-        while( ( barrier.load() & ~exclusive_addend ) > 0 );
+        while( ( barrier.load() & maximum_shared ) > 0 );
     }
 
     void unlock()
@@ -200,10 +222,8 @@ public:
 
     void lock_shared()
     {
-        while( barrier.fetch_add(1) > maximum_shared )
-        {
-            barrier.fetch_sub(1);
-        }
+        barrier.fetch_add(1);
+        while( barrier.load() > maximum_shared );
     }
 
     void unlock_shared()
@@ -213,7 +233,9 @@ public:
 
     bool try_lock_shared()
     {
-        bool owned = (barrier.fetch_add(1) <= maximum_shared);
+        barrier.fetch_add(1);
+        
+        bool owned = (barrier.load() <= maximum_shared);
 
         if(!owned)
         {
@@ -299,7 +321,7 @@ class WorkThread
 {
 private:
     typedef object_method_delegate<WorkThread,void> thread_method;
-    typedef std::unique_lock<std::mutex>            frame_lock;
+    typedef std::unique_lock<spin_mutex>            frame_lock;
     typedef std::queue<QItem>                       work_queue;
     typedef std::function<void(QItem&)>             work_method;
 
@@ -307,7 +329,8 @@ private:
     size_t          user_id;
     std::thread     thread;
     work_method     method;
-    std::mutex      data_lock;
+//    std::mutex      data_lock;
+    spin_mutex      data_lock;
     work_queue      queue;
     bool            quit    = false;
     bool            abandon = false;
@@ -341,10 +364,10 @@ private:
 
 
             {
-                Timer<> taft;
+                timer<> taft;
                 size_t s = work_to_do.size();
                 Process( work_to_do );
-                auto milli = taft.Delta<std::milli>();
+                auto milli = taft.delta<std::milli>();
                 if(milli > 1000)
                 {
                     LOG_UNAME("Thread", "%lu : %6lu/%6lu : %3.2f ms",user_id,s,queue.size(),milli );

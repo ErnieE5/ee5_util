@@ -259,7 +259,7 @@ class TP : public i_marshal_work
 {
 
 private:
-    using mem_pool_t    = static_memory_pool<128,100000>;
+    using mem_pool_t    = static_memory_pool<128,1000000>;
     using qitem_t       = std::shared_ptr<i_marshaled_call>;
     using work_thread_t = ee5::WorkThread<qitem_t>;
     using tvec_t        = std::vector<work_thread_t>;
@@ -268,7 +268,9 @@ private:
 
     spin_mutex          termination_;
 
-    std::atomic_flag    active;
+//    std::atomic_flag    active;
+    
+    spin_shared_mutex<> active;
 
 
     mem_pool_t          mem;
@@ -293,13 +295,12 @@ private:
 
     RC lock()
     {
-//        barrier.lock();
-        return s_ok();
+        return s_ok(); // active.try_lock_shared() ? s_ok() : e_pool_terminated();
     }
 
     void unlock()
     {
-//        barrier.unlock();
+        // active.unlock_shared();
     }
 
     RC get_storage(size_t size,void** pp)
@@ -321,8 +322,10 @@ private:
 
             if(!*pp)
             {
-                //std::this_thread::sleep_for(std::chrono::milliseconds(1));
-                std::this_thread::yield();
+                printf("\n!!!!!!!!\n");
+                std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+                
+//                std::this_thread::yield();
                 m++;
             }
             else
@@ -345,6 +348,8 @@ private:
 public:
     TP()
     {
+        active.lock();
+        
 //        printf("t_count: %lu\n",t_count);
 
         // Create the threads first...
@@ -364,6 +369,8 @@ public:
 
     void Shutdown(bool abandon = false)
     {
+        active.lock();
+        
         for(auto& k : threads)
         {
             k.Quit();
@@ -377,12 +384,21 @@ public:
 
         printf("-%lu\n",s);
     }
+    
+    void Start()
+    {
+        active.unlock();
+    }
 
+    
+    
 };
 
 
 TP p;
 
+
+#include <functional>
 
 
 //-------------------------------------------------------------------------------------------------
@@ -456,7 +472,7 @@ struct ThreadpoolTest
 
     void CalcFactorial(unsigned long n)
     {
-        Timer<> taft;
+        timer<> taft;
         long double f = Factorial(n);
 
         for(unsigned long h = n;h > 2;h--)
@@ -469,7 +485,7 @@ struct ThreadpoolTest
         }
 
 
-        LOG_ALWAYS("n: %2lu value: %26.0Lf %5.0f us",n, Factorial(n),taft.Delta<std::micro>() );
+        LOG_ALWAYS("n: %2lu value: %26.0Lf %5.0f us",n, Factorial(n),taft.delta<std::micro>() );
     }
 };
 
@@ -489,13 +505,14 @@ RC FunctionTests()
     int             int_local       = 55555;
     double          double_local    = 55.555;
 
-    Timer<> t;
+    timer<> t;
+    
+    p.Start();
 
 
     // Scalar Types
     //
     CRR( p.Async( &target, &ThreadpoolTest::ScalarTypes, 1, 11.1, 1000000000000000ul ) );
-
 
     // Factorial Work Product
     //
@@ -504,10 +521,9 @@ RC FunctionTests()
         CRR( p.Async( &target, &ThreadpoolTest::CalcFactorial, n ) );
     }
 
-    // Full 9 Argument Support
+    // 9 Argument Support
     //
     CRR( p.Async( &target, &ThreadpoolTest::NineArgs, 1, 2, 3, 4, 5, 6, 7, 8, 9 ) );
-
 
     // RValue Forwarding to marshaling class
     //
@@ -553,13 +569,12 @@ RC FunctionTests()
     //
     for( size_t c = 0; c < 5; ++c )
     {
-        CRR( p.Async( [h]()
+        CRR( p.Async( [&]()
         {
             LOG_UNAME("Lambda [h]()","[h]:%i", h );
         } ) );
         ++h;
     }
-
 
     // Calling "naked" C function with a single argument
     //
@@ -572,6 +587,8 @@ RC FunctionTests()
     //
     CRR( p.Async( t_function<int>,       5   ) );
     CRR( p.Async( t_function<size_t>,    6   ) );
+    
+    
 
     std::atomic_ulong cc;   // This value is used to sum the number of calls to the lambda "q"
                             // and is done via a capture. The sum at the end of the test should
@@ -615,20 +632,28 @@ RC FunctionTests()
 
     CRR( p.Async( q, 2, 2.2, 2 ) );
 
+   
     LOG_ALWAYS("Starting...","");
+    
+    timer<> t1;
     for(size_t g = 0;g < 2525252; g++)
     {
         CRR( p.Async( q, 3, g*.3, g ) );
     }
-    LOG_ALWAYS("Phase One Complete...","");
+    LOG_ALWAYS("Phase One Complete... %5.2lf ms",t1.delta<std::milli>());
+    
+    timer<> t2;
     for(size_t g = 0;g < 5252524; g++)
     {
         CRR( p.Async( q, 4, g*.4, g ) );
     }
-    LOG_ALWAYS("Phase Two Done.","");
+    LOG_ALWAYS("Phase Two Complete... %5.2lf ms",t2.delta<std::milli>());
 
-    //std::array<int,64> foo;
-
+    p.Shutdown();
+    LOG_ALWAYS("Asta........","");
+    return s_ok();
+    
+    
     spin_mutex          lock;
     //spin_barrier        lock  __attribute__ ((aligned (64)));
     //std::mutex          lock;
@@ -638,13 +663,14 @@ RC FunctionTests()
     std::list<size_t>   complete;
     auto join = [&lock,&complete](std::vector<int> add)
     {
-        Timer<> x;
+        timer<> x;
         framed_lock( lock, [&add,&complete]()
         {
             complete.push_back( add.size() );
             LOG_UNAME("join","size: %10lu add: %10lu",complete.size(),add.size());
         });
-        LOG_UNAME("Elapsed Time mutex","%10.0lf us",x.Delta());
+        
+        LOG_UNAME("Elapsed Time mutex","%10.0lf us",x.delta());
     };
 
     // This test "adds" more time by creating a large amount of work
@@ -654,7 +680,7 @@ RC FunctionTests()
     {
         CRR( p.Async( [size,&join]
         {
-            Timer<double> t;
+            timer<double> t;
 
             std::vector<int> v( size );
 
@@ -662,28 +688,28 @@ RC FunctionTests()
 
             p.Async( [&](std::vector<int> v1)
             {
-                Timer<double> t;
+                timer<double> t;
                 std::generate(v1.begin(),v1.end(), []{ return random(); });
                 LOG_UNAME("fart ","0x%.16lx Items %11lu, Time: %12.0lf us inner", v1.data(),
-                            v1.size(),t.Delta());
+                            v1.size(),t.delta());
 
                 p.Async( join, std::move(v1) );
             },
             std::move(v) );
 
-            LOG_UNAME("fart ","0x%.16lx Items %11lu, Time: %12.0lf us outer", addr, v.size(), t.Delta() );
+                LOG_UNAME("fart ","0x%.16lx Items %11lu, Time: %12.0lf us outer", addr, v.size(), t.delta() );
         } ) );
     }
 
-    std::this_thread::sleep_for(std::chrono::seconds(1));
-
-    printf("d00d!\n");
+     std::this_thread::sleep_for(std::chrono::seconds(1));
+// 
+//     printf("d00d!\n");
 
     p.Shutdown();
 
 //    assert( cc == 7777777 );
 
-    LOG_ALWAYS("cc == %lu", cc.load() );
+//    LOG_ALWAYS("cc == %lu", cc.load() );
 
     LOG_ALWAYS("Asta........","");
 
@@ -731,10 +757,10 @@ void App()
         LOG_ALWAYS("互いに同胞の精神を%s","もって行動しなければならない。");
     }
 
-    Timer<>   taft;
+    timer<>   taft;
 
     FunctionTests();
-    LOG_ALWAYS("Elapsed Time: %lg seconds.",taft.Delta<std::ratio<1>>() );
+    LOG_ALWAYS("Elapsed Time: %lg seconds.",taft.delta<std::ratio<1>>() );
 
     LOG_ALWAYS("%s","互いに同胞の精神をもって行動しなければならない。");
     LOG_ALWAYS("%s","请以手足关系的精神相对待");
@@ -743,6 +769,146 @@ void App()
 }
 
 
+//struct
+
+
+//template<typename F,typename...TArgs>
+
+
+
+struct Foo
+{
+    void Bar(int x,int y)
+    {
+        printf("%i %i\n",x,y);
+    }
+    
+    void Monkey(int x, double y)
+    {
+        printf("%i %lf\n",x,y);
+    }
+    
+    int crap(int i)
+    {
+        printf("crap %i\n",i);
+        return i;
+    }
+    
+};
+
+
+class m
+{
+    std::function<void()> call;
+    
+public:
+    template<typename T,typename PM,typename...TArgs>
+    m(T* t,PM pm,TArgs...args) : call( std::bind(pm,t,args...) )
+    {
+    }
+    
+    void operator()()
+    {
+        call();
+    }
+    
+};
+
+
+
+template<typename T,typename...TArgs>
+struct Zed : public i_marshaled_call
+{
+    using PM = void(T::*)(TArgs...);
+    using PO = T*;
+    
+    decltype( std::bind( std::declval<PM>(), std::declval<PO>(), std::declval<TArgs>() ... ) ) ff;
+    
+    template<typename...CArgs>
+    Zed( T* pO, PM pM, CArgs&&...args ) : ff( std::bind(  pM, pO, args... ) )
+    {
+    }
+    
+    void operator()()
+    {
+        ff();
+    }
+    
+    void Execute()
+    {
+        ff();
+    }
+    
+};
+
+
+
+void Func()
+{
+    printf("Hola!\n");
+}
+
+void T1()
+{
+    using namespace std::placeholders;
+    Foo bar;
+
+    using Gl = Zed<Foo,int,int>;
+    
+    i_marshaled_call* p = new Gl( &bar, &Foo::Bar, 1, 2);
+    
+//    i_marshaled_call* p = new ( Func );
+
+    
+    
+    
+    Gl z( &bar, &Foo::Bar, 1, 2);
+    
+    printf("e1\n");
+    z();
+    printf("e2\n");
+    p->Execute();
+    printf("e3\n");
+    
+    std::function<void()> f( std::bind( &Foo::Bar, &bar, 1, 2) );
+
+    std::tuple<int,double> x( 1,1.0 );
+
+    
+    auto a1 = std::bind( &Foo::crap, &bar, _1);
+    object_method_delegate<Foo,int,int> a2(&bar,&Foo::crap);
+    auto a3 = std::bind( &Foo::crap, &bar, 7);
+    
+    printf("a1: %lu == %i\n",sizeof(a1),a1(5) );
+    printf("a2: %lu == %i\n",sizeof(a2),a2(6) );
+    printf("a3: %lu == %i\n",sizeof(a3),a3()  );
+    
+    
+//    bar.Monkey(x);
+
+//    std::result_of< std::bind( (Foo::*)(int,int),Foo*,int,double,char> )>::type g;
+    
+    
+    //decltype( std::bind(&Foo::Bar, &bar, 1, 2) ) g;
+    
+    auto f1 = std::bind( &Foo::Bar, _1, 1, 2);
+    m f2(&bar,&Foo::Bar, 1, 2);
+    
+
+    auto f3 = std::bind( &Foo::crap, &bar, 22);
+    
+    std::function<int(int)> f4 = std::bind( &Foo::crap, &bar, _1);
+    
+    f();
+    f1(&bar);
+    f2();
+    printf("f3: %i\n",f3()   );
+    printf("f4: %i\n",f4(55) );
+    
+    printf("dude\n");
+    
+    exit(0);
+}
 
 
 
@@ -753,6 +919,10 @@ void App()
 //
 int main()
 {
+//     T1();
+//     p.Start();
+//     p.Shutdown();
+    
 //   Moink();
 //   int iRet = 0;
     int iRet = ee5::Startup(0,nullptr);
@@ -767,6 +937,6 @@ int main()
     }
 
 
-    return iRet;
+    return 0;
 }
 

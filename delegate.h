@@ -90,6 +90,10 @@ public:
 // need to keep only one copy around, consider pointers and don't forget about locking.  (But you
 // already know this anyway right?)
 //
+//
+//  std::bind is very close, but has a disavantage that the data items...
+//
+//
 //  Examples:
 //        #include <iostream>
 //        #include <vector>
@@ -134,141 +138,185 @@ public:
 //
 //
 //
+// template<typename TFunction, typename TReturn, typename ...TArgs>
+// class marshal_delegate
+// {
+// private:
+//     
+//     typedef std::tuple<typename std::remove_reference<TArgs>::type...> Storage;
+//     
+// public:
+//     static const size_t argument_count = sizeof...(TArgs);
+//     
+//     // If this assert fires, you should likely re-think your argument passing strategy.
+//     //
+//     static_assert(argument_count<=9,"This template supports marshaling of up to 9 arguments.");
+//     
+// private:
+//     TFunction   method;
+//     Storage     values;
+//     
+//     template<size_t i> typename std::enable_if<i==0,TReturn>::type tuple_call()
+//     {
+//         return method();
+//     }
+//     
+//     template<size_t i> typename std::enable_if<i==1,TReturn>::type tuple_call()
+//     {
+//         return method(std::get<0>(values));
+//     }
+//     
+//     template<size_t i> typename std::enable_if<i==2,TReturn>::type tuple_call()
+//     {
+//         return method(std::get<0>(values),std::get<1>(values));
+//     }
+//     
+//     template<size_t i> typename std::enable_if<i==3,TReturn>::type tuple_call()
+//     {
+//         return method(std::get<0>(values),std::get<1>(values),std::get<2>(values));
+//     }
+//     
+//     template<size_t i> typename std::enable_if<i==4,TReturn>::type tuple_call()
+//     {
+//         return 
+//         method
+//         (
+//             std::get<0>(values),
+//          std::get<1>(values),
+//          std::get<2>(values),
+//          std::get<3>(values)
+//         );
+//     }
+//     
+//     template<size_t i> typename std::enable_if<i==5,TReturn>::type tuple_call()
+//     {
+//         return 
+//         method
+//         (
+//             std::get<0>(values),
+//          std::get<1>(values),
+//          std::get<2>(values),
+//          std::get<3>(values),
+//          std::get<4>(values)
+//         );
+//     }
+//     
+//     template<size_t i> typename std::enable_if<i==6,TReturn>::type tuple_call()
+//     {
+//         return 
+//         method
+//         (
+//             std::get<0>(values),
+//          std::get<1>(values),
+//          std::get<2>(values),
+//          std::get<3>(values),
+//          std::get<4>(values),
+//          std::get<5>(values)
+//         );
+//     }
+//     
+//     template<size_t i> typename std::enable_if<i==7,TReturn>::type tuple_call()
+//     {
+//         return 
+//         method
+//         (
+//             std::get<0>(values),
+//          std::get<1>(values),
+//          std::get<2>(values),
+//          std::get<3>(values),
+//          std::get<4>(values),
+//          std::get<5>(values),
+//          std::get<6>(values)
+//         );
+//     }
+//     
+//     template<size_t i> typename std::enable_if<i==8,TReturn>::type tuple_call()
+//     {
+//         return 
+//         method
+//         (
+//             std::get<0>(values),
+//          std::get<1>(values),
+//          std::get<2>(values),
+//          std::get<3>(values),
+//          std::get<4>(values),
+//          std::get<5>(values),
+//          std::get<6>(values),
+//          std::get<7>(values)
+//         );
+//     }
+//     
+//     template<size_t i> typename std::enable_if<i==9,TReturn>::type tuple_call()
+//     {
+//         return 
+//         method
+//         (
+//             std::get<0>(values),
+//          std::get<1>(values),
+//          std::get<2>(values),
+//          std::get<3>(values),
+//          std::get<4>(values),
+//          std::get<5>(values),
+//          std::get<6>(values),
+//          std::get<7>(values),
+//          std::get<8>(values)
+//         );
+//     }
+//     
+// public:
+//     marshal_delegate(TFunction f) : method( f ) // No Values to pass
+//     {
+//     }
+//     
+//     marshal_delegate(TFunction f,TArgs&&...args ) :
+//     method( f ), values( std::forward<TArgs>(args)... )
+//     {
+//     }
+//     
+//     marshal_delegate(TFunction f,const TArgs&...args ) :
+//     method( f ), values( args... )
+//     {
+//     }
+//     
+//     marshal_delegate(const marshal_delegate& _o) :
+//     method(_o.method), values(_o.values)
+//     {
+//     }
+//     
+//     inline TReturn operator()()
+//     {
+//         return tuple_call<argument_count>();
+//     }
+// };
+
 template<typename TFunction, typename TReturn, typename ...TArgs>
 class marshal_delegate
 {
-private:
-
-    typedef std::tuple<typename std::remove_reference<TArgs>::type...> Storage;
-
-public:
-    static const size_t argument_count = sizeof...(TArgs);
-
-    // If this assert fires, you should likely re-think your argument passing strategy.
-    //
-    static_assert(argument_count<=9,"This template supports marshaling of up to 9 arguments.");
+    public:
+    static constexpr size_t argument_count = sizeof...(TArgs);
 
 private:
+    template<int...>        struct sequence                        {};
+    template<int N,int...S> struct unpacker:unpacker<N-1,N-1,S...> {};
+    template<int...S>       struct unpacker<0,S...>
+    {
+        typedef sequence<S...> type;
+    };
+   
+    using storage_t = std::tuple<typename std::remove_reference<TArgs>::type...>;
+    using unpack_t  = typename unpacker<argument_count>::type;
+    
     TFunction   method;
-    Storage     values;
+    storage_t   values;
 
-    template<size_t i> typename std::enable_if<i==0,TReturn>::type tuple_call()
+    template<int...S>
+    TReturn tuple_call( sequence<S...> )
     {
-        return method();
+        return method( std::get<S>(values)... );
     }
-
-    template<size_t i> typename std::enable_if<i==1,TReturn>::type tuple_call()
-    {
-        return method(std::get<0>(values));
-    }
-
-    template<size_t i> typename std::enable_if<i==2,TReturn>::type tuple_call()
-    {
-        return method(std::get<0>(values),std::get<1>(values));
-    }
-
-    template<size_t i> typename std::enable_if<i==3,TReturn>::type tuple_call()
-    {
-        return method(std::get<0>(values),std::get<1>(values),std::get<2>(values));
-    }
-
-    template<size_t i> typename std::enable_if<i==4,TReturn>::type tuple_call()
-    {
-        return 
-            method
-            (
-                std::get<0>(values),
-                std::get<1>(values),
-                std::get<2>(values),
-                std::get<3>(values)
-            );
-    }
-
-    template<size_t i> typename std::enable_if<i==5,TReturn>::type tuple_call()
-    {
-        return 
-            method
-            (
-                std::get<0>(values),
-                std::get<1>(values),
-                std::get<2>(values),
-                std::get<3>(values),
-                std::get<4>(values)
-            );
-    }
-
-    template<size_t i> typename std::enable_if<i==6,TReturn>::type tuple_call()
-    {
-        return 
-            method
-            (
-                std::get<0>(values),
-                std::get<1>(values),
-                std::get<2>(values),
-                std::get<3>(values),
-                std::get<4>(values),
-                std::get<5>(values)
-            );
-    }
-
-    template<size_t i> typename std::enable_if<i==7,TReturn>::type tuple_call()
-    {
-        return 
-            method
-            (
-                std::get<0>(values),
-                std::get<1>(values),
-                std::get<2>(values),
-                std::get<3>(values),
-                std::get<4>(values),
-                std::get<5>(values),
-                std::get<6>(values)
-            );
-    }
-
-    template<size_t i> typename std::enable_if<i==8,TReturn>::type tuple_call()
-    {
-        return 
-            method
-            (
-                std::get<0>(values),
-                std::get<1>(values),
-                std::get<2>(values),
-                std::get<3>(values),
-                std::get<4>(values),
-                std::get<5>(values),
-                std::get<6>(values),
-                std::get<7>(values)
-            );
-    }
-
-    template<size_t i> typename std::enable_if<i==9,TReturn>::type tuple_call()
-    {
-        return 
-            method
-            (
-                std::get<0>(values),
-                std::get<1>(values),
-                std::get<2>(values),
-                std::get<3>(values),
-                std::get<4>(values),
-                std::get<5>(values),
-                std::get<6>(values),
-                std::get<7>(values),
-                std::get<8>(values)
-            );
-    }
+    
 
 public:
-    marshal_delegate(TFunction f) : method( f ) // No Values to pass
-    {
-    }
-
-    marshal_delegate(TFunction f,TArgs&&...args ) :
-        method( f ), values( std::forward<TArgs>(args)... )
-    {
-    }
-
     marshal_delegate(TFunction f,const TArgs&...args ) :
         method( f ), values( args... )
     {
@@ -278,12 +326,15 @@ public:
         method(_o.method), values(_o.values)
     {
     }
-
+    
     inline TReturn operator()()
     {
-        return tuple_call<argument_count>();
+        return tuple_call( unpack_t() );
     }
 };
+
+
+
 
 
 
@@ -292,6 +343,7 @@ public:
 // method be queued and generically executed.  The primary use is by the various instantiations
 // of the marshaled_call template below.
 //
+
 struct i_marshaled_call
 {
     virtual void Execute() = 0;
@@ -316,11 +368,13 @@ private:
     Delegate call;
 
 public:
-    marshaled_call( TFunction f,TArgs&&...args) : call( f, std::forward<TArgs>(args)... )
+    marshaled_call( TFunction f,TArgs&&...args) :
+        call( f, std::forward<TArgs>(args)... )
     {
     }
 
-    marshaled_call(TFunction f, const TArgs&...args) : call( f,  args... )
+    marshaled_call(TFunction f, const TArgs&...args) :
+        call( f, args... )
     {
     }
 
@@ -333,6 +387,7 @@ public:
         call();
     }
 };
+
 
 
 

@@ -79,7 +79,6 @@ private:
         return rc;
     }
     
-    
 public:
 
     
@@ -93,6 +92,16 @@ public:
         using binder_t = object_method_delegate<O,void,typename ref_val<TArgs>::value_type...>;
         using method_t = marshaled_call<binder_t,typename std::remove_reference<TArgs>::type...>;
 
+// TODO: explore      
+// std::bind could also work with something like...
+//
+// decltype( std::bind( std::declval<PM>(), std::declval<PO>(), std::declval<TArgs>() ... ) ) binder;
+//        
+//      
+//         decltype(std::bind(pM,pO,args...)) j = std::bind(pM,pO,args...);
+//         auto b = std::bind(pM,pO,args...);
+//         printf("M: %lu --std::bind\n",sizeof(b));
+
         return __enqueue<binder_t,method_t>( binder_t(pO,pM), args... );
     }
     
@@ -104,7 +113,7 @@ public:
     {
         using binder_t = object_method_delegate<O,void,typename ref_val<TArgs>::value_type...>;
         using method_t = marshaled_call<binder_t,typename std::remove_reference<TArgs>::type...>;
-
+        
         return __enqueue<binder_t,method_t>( binder_t(pO,pM), args... );
     }
     
@@ -117,21 +126,6 @@ public:
         using method_t = marshaled_call< std::function< void() > >;
 
         return __enqueue<binder_t,method_t>( f );        
-        
-//         method_t* call = nullptr;
-//         
-//         RC rc = __lock_get<method_t>(&call);
-//         
-//         if( rc == s_ok() )
-//         {
-//             new(call) method_t( f );
-//             
-//             rc = enqueue_work(call);
-//             
-//             unlock();
-//         }
-//         
-//         return rc;
     }
     
     
