@@ -61,6 +61,8 @@ LogLine
 //    alignas(size_t)
     char                msg[1];
 
+    
+
     static RC create_buffer(size_t size,LogLinePtr& pBuffer,size_t* pcMsg = nullptr, char** ppMsg = nullptr)
     {
         char*   pBuf    = nullptr;
@@ -102,17 +104,18 @@ RC cb_vsnprintf(size_t c,char* p,size_t* pc,char** ppP,const char* fmt,va_list v
 class ConsoleLogger
 {
 private:
-    typedef WorkThread<LogLinePtr>          work_thread;
-    typedef std::unique_ptr<work_thread>    ThreadPtr;
+    using clock_t    = std::chrono::high_resolution_clock;
+    using thread_t   = WorkThread<LogLinePtr>;
+    using thread_ptr = std::unique_ptr<thread_t>;
 
-    static ThreadPtr pThread;
+    static thread_ptr pThread;
 
     static void console_log(const __info* i,...);
 
     static void Doit(LogLinePtr& pLL)
     {
-        time_t now = std::chrono::high_resolution_clock::to_time_t(pLL->time);
-        std::chrono::high_resolution_clock::time_point now_s = std::chrono::system_clock::from_time_t(now);
+        time_t now = clock_t::to_time_t(pLL->time);
+        clock_t::time_point now_s = std::chrono::system_clock::from_time_t(now);
 
         char buf[100];
         std::strftime(buf, sizeof(buf), "%FT%T", gmtime(&now));
@@ -128,9 +131,9 @@ private:
 
 protected:
 public:
-    static int Startup(program_log* pLog)
+    static RC Startup(program_log* pLog)
     {
-        pThread.reset( new work_thread( 55, std::function<void(LogLinePtr&)>(ConsoleLogger::Doit) ) );
+        pThread.reset( new thread_t( 55, std::function<void(LogLinePtr&)>(ConsoleLogger::Doit) ) );
         *pLog = ConsoleLogger::console_log;
         return pThread->Startup();
     }
@@ -140,16 +143,9 @@ public:
         pThread->Shutdown();
     }
 
-    static int Enqueue(LogLinePtr&& p)
+    static RC Enqueue(LogLinePtr&& p)
     {
-        pThread->Enqueue
-        (
-            std::move( p ),
-            [](LogLinePtr& p)
-            {
-                p->time = std::chrono::high_resolution_clock::now();
-            }
-        );
+        pThread->Enqueue( std::move( p ) );
 
         return s_ok();
     }

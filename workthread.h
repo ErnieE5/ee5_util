@@ -122,24 +122,20 @@ public:
         barrier = false;
     }
 
-    void lock()
+    void lock(bool yield = true)
     {
         bool expected = false;
         while( ! barrier.compare_exchange_strong( expected, true, acquire, relaxed ) )
         {
             expected = false;
+            if( yield ) std::this_thread::yield();
         }
     }
 
     void unlock()
     {
-        bool expected = true;
-        while( ! barrier.compare_exchange_strong( expected, false, release ) )
-        {
-            // You are breaking the contract if this assert fires!
-            assert( false );
-            expected = true;
-        }
+         assert( barrier.load() == true );
+         barrier.store(false,release);
     }
 
     bool try_lock()
@@ -155,20 +151,26 @@ struct is_64_bit
 {
     static const bool value = sizeof(void*) == sizeof(uint64_t);
 
-    using  value_type = uint_fast64_t;
+    using  value_type   = uint_fast64_t;
+    using  barrier_type = std::atomic_uint_fast64_t;
 
-    static constexpr value_type exclusive_addend    = 0x0001000000000000;
-    static constexpr value_type maximum_shared      = 0x000000FFFFFFFFFF;
+    
+    static constexpr value_type addend_exclusive    = 0x0000100000000000;
+    static constexpr value_type mask_exclusive      = 0x0FFFF00000000000;
+    static constexpr value_type addend_shared       = 0x0000000000000010;
+    static constexpr value_type mask_shared         = 0x000000FFFFFFFFF0;
 };
 
 struct is_32_bit
 {
-   static const bool value = sizeof(void*) == sizeof(uint32_t);
-
-    using  value_type = uint_fast64_t;
-
-    static constexpr value_type exclusive_addend    = 0x00100000;
-    static constexpr value_type maximum_shared      = 0x0000FFFF;
+//    static const bool value = sizeof(void*) == sizeof(uint32_t);
+// 
+//     using  value_type   = uint_fast32_t;
+//     using  barrier_type = std::atomic_uint_fast32_t;
+//     
+//     static constexpr value_type exclusive_addend    = 0x00100000;
+//     static constexpr value_type maximum_exclusive   = 0xFFF00000;
+//     static constexpr value_type maximum_shared      = 0x0000FFFF;
 };
 
 
@@ -181,11 +183,14 @@ private:
     static constexpr std::memory_order acquire = std::memory_order_acquire;
 
     using storage_t = typename storage_traits::value_type;
+    using barrier_t = typename storage_traits::barrier_type;
 
-    static constexpr storage_t exclusive_addend  = storage_traits::exclusive_addend;
-    static constexpr storage_t maximum_shared    = storage_traits::maximum_shared;
+    static constexpr storage_t addend_exclusive = storage_traits::addend_exclusive;
+    static constexpr storage_t mask_exclusive   = storage_traits::mask_exclusive;
+    static constexpr storage_t addend_shared    = storage_traits::addend_shared;
+    static constexpr storage_t mask_shared      = storage_traits::mask_shared;
 
-    std::atomic<storage_t>  barrier;
+    barrier_t  barrier;
 
 public:
     spin_shared_mutex()
@@ -193,28 +198,45 @@ public:
         barrier = 0;
     }
 
+    // Notes on the write lock. Th
     void lock()
     {
-        while( ( barrier.fetch_add(exclusive_addend,release) & exclusive_addend ) != 0 )
+        // Spin until we acquire the write lock. Which we know is "ours" because 
+        // no one else owned it before. 
+        //
+        storage_t ex;
+        while( ( ex = barrier.fetch_add(addend_exclusive,release) & mask_exclusive ) > 0 )
         {
-            barrier.fetch_sub(exclusive_addend);
+            barrier.fetch_sub(addend_exclusive);
+
+            for(;ex&mask_exclusive;ex -= addend_exclusive)
+            {
+                //printf("!\n");
+                std::this_thread::yield();
+            }
         }
 
-        while( ( barrier.load() & maximum_shared ) > 0 );
+        // Spin while any readers are still owning a lock
+        //
+        while( ( barrier.load() & mask_shared ) > 0 );
     }
 
     void unlock()
     {
-        barrier.fetch_sub(exclusive_addend);
+        barrier.fetch_sub(addend_exclusive);
     }
 
     bool try_lock()
     {
-        bool owned = barrier.fetch_add(exclusive_addend) == exclusive_addend;
+        // The only way this can succeed is if ALL writers and all readers 
+        // are not doing anything, which means that the value in the barrier
+        // had to be zero.
+        //
+        bool owned = barrier.fetch_add(addend_exclusive) == 0;
 
         if( !owned )
         {
-            barrier.fetch_sub(exclusive_addend);
+            barrier.fetch_sub(addend_exclusive);
         }
 
         return owned;
@@ -222,24 +244,33 @@ public:
 
     void lock_shared()
     {
-        barrier.fetch_add(1);
-        while( barrier.load() > maximum_shared );
+        // So "take" the lock, 
+        //
+        if( (++barrier & mask_shared) > mask_shared )
+//        if( barrier.fetch_add(1,acquire) > maximum_shared )
+        {
+            printf("Elapsed Fuck!\n");
+            // but spin until a "max read" slot is availble OR while a writer 
+            // has the lock OR is waiting for readers to finish.
+            //
+            while( barrier.load(acquire) & mask_exclusive );
+        }
     }
 
     void unlock_shared()
     {
-        barrier.fetch_sub(1);
+        barrier.fetch_sub(addend_shared);
     }
 
     bool try_lock_shared()
     {
-        barrier.fetch_add(1);
+        barrier.fetch_add(addend_shared);
         
-        bool owned = (barrier.load() <= maximum_shared);
+        bool owned = ( ( barrier.load() & mask_shared ) <= mask_shared );
 
         if(!owned)
         {
-            barrier.fetch_sub(1);
+            barrier.fetch_sub(addend_shared);
         }
 
         return owned;
@@ -290,9 +321,8 @@ public:
 
     void Chill(bool after = false)
     {
-        std::this_thread::yield();
         frame_lock _lock(mtx);
-        cv.wait( _lock, [this]{ return event_set; } );
+        cv.wait( _lock, [&]{ return event_set; } );
         event_set = after;
     }
 
@@ -320,8 +350,9 @@ template<typename QItem>
 class WorkThread
 {
 private:
+    using mutex = spin_mutex; //    std::mutex;
     typedef object_method_delegate<WorkThread,void> thread_method;
-    typedef std::unique_lock<spin_mutex>            frame_lock;
+    typedef std::unique_lock<mutex>                 frame_lock;
     typedef std::queue<QItem>                       work_queue;
     typedef std::function<void(QItem&)>             work_method;
 
@@ -329,8 +360,7 @@ private:
     size_t          user_id;
     std::thread     thread;
     work_method     method;
-//    std::mutex      data_lock;
-    spin_mutex      data_lock;
+    mutex           data_lock;
     work_queue      queue;
     bool            quit    = false;
     bool            abandon = false;
@@ -341,7 +371,6 @@ private:
         {
             method( items.front() );
             items.pop();
-            //std::this_thread::yield();
         }
     }
 
@@ -432,7 +461,7 @@ public:
         }
     }
 
-    void Enqueue( QItem&& p, std::function<void(QItem&)> f /* = nullptr*/ )
+    void Enqueue( QItem&& p, std::function<void(QItem&)> f  = nullptr )
     {
         bool signal = false;
         {

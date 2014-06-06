@@ -21,7 +21,7 @@ namespace ee5
 
 const size_t LogLine::msg_offset = offsetof(LogLine,msg);
 
-ConsoleLogger::ThreadPtr ConsoleLogger::pThread;
+ConsoleLogger::thread_ptr ConsoleLogger::pThread;
 
 
 
@@ -54,7 +54,7 @@ RC cb_vsnprintf(size_t c,char* p,size_t* pc,char** ppP,const char* fmt,va_list v
 //
 void ConsoleLogger::console_log(const __info* i,...)
 {
-    RC   rc  = s_ok();
+    RC      rc  = s_ok();
     size_t  c   = 0;
     char*   p   = nullptr;
 
@@ -67,6 +67,7 @@ void ConsoleLogger::console_log(const __info* i,...)
 
     if( rc == s_ok() )
     {
+        pLogLine->time  = clock_t::now();
         pLogLine->id    = std::this_thread::get_id();
         pLogLine->info  = i;
 

@@ -90,8 +90,9 @@ public:
 // need to keep only one copy around, consider pointers and don't forget about locking.  (But you
 // already know this anyway right?)
 //
-//
-//  std::bind is very close, but has a disavantage that the data items...
+// std::bind is very close to this idea. I may switch, but I have have used T*, and T::*pmf in that
+// order for going on 19 years at this point. I understand WHY the STL flipped it, but it is hard to 
+// adjust right now...
 //
 //
 //  Examples:
@@ -137,158 +138,6 @@ public:
 //        }
 //
 //
-//
-// template<typename TFunction, typename TReturn, typename ...TArgs>
-// class marshal_delegate
-// {
-// private:
-//     
-//     typedef std::tuple<typename std::remove_reference<TArgs>::type...> Storage;
-//     
-// public:
-//     static const size_t argument_count = sizeof...(TArgs);
-//     
-//     // If this assert fires, you should likely re-think your argument passing strategy.
-//     //
-//     static_assert(argument_count<=9,"This template supports marshaling of up to 9 arguments.");
-//     
-// private:
-//     TFunction   method;
-//     Storage     values;
-//     
-//     template<size_t i> typename std::enable_if<i==0,TReturn>::type tuple_call()
-//     {
-//         return method();
-//     }
-//     
-//     template<size_t i> typename std::enable_if<i==1,TReturn>::type tuple_call()
-//     {
-//         return method(std::get<0>(values));
-//     }
-//     
-//     template<size_t i> typename std::enable_if<i==2,TReturn>::type tuple_call()
-//     {
-//         return method(std::get<0>(values),std::get<1>(values));
-//     }
-//     
-//     template<size_t i> typename std::enable_if<i==3,TReturn>::type tuple_call()
-//     {
-//         return method(std::get<0>(values),std::get<1>(values),std::get<2>(values));
-//     }
-//     
-//     template<size_t i> typename std::enable_if<i==4,TReturn>::type tuple_call()
-//     {
-//         return 
-//         method
-//         (
-//             std::get<0>(values),
-//          std::get<1>(values),
-//          std::get<2>(values),
-//          std::get<3>(values)
-//         );
-//     }
-//     
-//     template<size_t i> typename std::enable_if<i==5,TReturn>::type tuple_call()
-//     {
-//         return 
-//         method
-//         (
-//             std::get<0>(values),
-//          std::get<1>(values),
-//          std::get<2>(values),
-//          std::get<3>(values),
-//          std::get<4>(values)
-//         );
-//     }
-//     
-//     template<size_t i> typename std::enable_if<i==6,TReturn>::type tuple_call()
-//     {
-//         return 
-//         method
-//         (
-//             std::get<0>(values),
-//          std::get<1>(values),
-//          std::get<2>(values),
-//          std::get<3>(values),
-//          std::get<4>(values),
-//          std::get<5>(values)
-//         );
-//     }
-//     
-//     template<size_t i> typename std::enable_if<i==7,TReturn>::type tuple_call()
-//     {
-//         return 
-//         method
-//         (
-//             std::get<0>(values),
-//          std::get<1>(values),
-//          std::get<2>(values),
-//          std::get<3>(values),
-//          std::get<4>(values),
-//          std::get<5>(values),
-//          std::get<6>(values)
-//         );
-//     }
-//     
-//     template<size_t i> typename std::enable_if<i==8,TReturn>::type tuple_call()
-//     {
-//         return 
-//         method
-//         (
-//             std::get<0>(values),
-//          std::get<1>(values),
-//          std::get<2>(values),
-//          std::get<3>(values),
-//          std::get<4>(values),
-//          std::get<5>(values),
-//          std::get<6>(values),
-//          std::get<7>(values)
-//         );
-//     }
-//     
-//     template<size_t i> typename std::enable_if<i==9,TReturn>::type tuple_call()
-//     {
-//         return 
-//         method
-//         (
-//             std::get<0>(values),
-//          std::get<1>(values),
-//          std::get<2>(values),
-//          std::get<3>(values),
-//          std::get<4>(values),
-//          std::get<5>(values),
-//          std::get<6>(values),
-//          std::get<7>(values),
-//          std::get<8>(values)
-//         );
-//     }
-//     
-// public:
-//     marshal_delegate(TFunction f) : method( f ) // No Values to pass
-//     {
-//     }
-//     
-//     marshal_delegate(TFunction f,TArgs&&...args ) :
-//     method( f ), values( std::forward<TArgs>(args)... )
-//     {
-//     }
-//     
-//     marshal_delegate(TFunction f,const TArgs&...args ) :
-//     method( f ), values( args... )
-//     {
-//     }
-//     
-//     marshal_delegate(const marshal_delegate& _o) :
-//     method(_o.method), values(_o.values)
-//     {
-//     }
-//     
-//     inline TReturn operator()()
-//     {
-//         return tuple_call<argument_count>();
-//     }
-// };
-
 template<typename TFunction, typename TReturn, typename ...TArgs>
 class marshal_delegate
 {
@@ -317,6 +166,11 @@ private:
     
 
 public:
+    marshal_delegate(TFunction f,TArgs&&...args ) :
+        method( f ), values( std::forward<TArgs>(args)... )
+    {
+    }
+        
     marshal_delegate(TFunction f,const TArgs&...args ) :
         method( f ), values( args... )
     {

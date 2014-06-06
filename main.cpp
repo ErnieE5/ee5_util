@@ -259,7 +259,7 @@ class TP : public i_marshal_work
 {
 
 private:
-    using mem_pool_t    = static_memory_pool<128,1000000>;
+    using mem_pool_t    = static_memory_pool<128,100000>;
     using qitem_t       = std::shared_ptr<i_marshaled_call>;
     using work_thread_t = ee5::WorkThread<qitem_t>;
     using tvec_t        = std::vector<work_thread_t>;
@@ -295,12 +295,12 @@ private:
 
     RC lock()
     {
-        return s_ok(); // active.try_lock_shared() ? s_ok() : e_pool_terminated();
+        return active.try_lock_shared() ? s_ok() : e_pool_terminated();
     }
 
     void unlock()
     {
-        // active.unlock_shared();
+        active.unlock_shared();
     }
 
     RC get_storage(size_t size,void** pp)
@@ -322,7 +322,7 @@ private:
 
             if(!*pp)
             {
-                std::this_thread::yield();
+//                std::this_thread::yield();
                 m++;
             }
             else
@@ -366,20 +366,37 @@ public:
 
     void Shutdown(bool abandon = false)
     {
-        active.lock();
-
-        for(auto& k : threads)
-        {
-            k.Quit();
-        }
-
         size_t s = 0;
         for(auto& k : threads)
         {
             s += k.Pending();
         }
-
+        
         printf("-%lu\n",s);
+        
+        active.lock();
+
+        s = 0;
+        for(auto& k : threads)
+        {
+            s += k.Pending();
+        }
+        
+        printf("-%lu\n",s);
+        
+        for(auto& k : threads)
+        {
+            k.Quit();
+        }
+        
+        s = 0;
+        for(auto& k : threads)
+        {
+            s += k.Pending();
+        }
+        
+        printf("-%lu\n",s);
+        
     }
 
     void Start()
@@ -461,10 +478,7 @@ struct ThreadpoolTest
         return Factorial(n-1, a * n );
     }
 
-    spin_mutex  lock __attribute__ ((aligned (64)));
-
-    std::array<int,64> g;
-
+    spin_mutex  lock;
     long double total = 0;
 
     void CalcFactorial(unsigned long n)
@@ -484,6 +498,27 @@ struct ThreadpoolTest
 
         LOG_ALWAYS("n: %2lu value: %26.0Lf %5.0f us",n, Factorial(n),taft.delta<std::micro>() );
     }
+
+    std::atomic_size_t c;
+    //size_t c = 0;
+    std::array<int,100> x1;
+    //std::mutex  multi_writer;
+    //spin_barrier multi_writer;
+    spin_shared_mutex<> multi_writer;
+    //spin_mutex multi_writer;
+    std::array<int,100> x2;
+    
+    void MultiWriter(size_t x)
+    {
+//        multi_writer.lock_shared();
+        multi_writer.lock();
+//        LOG_UNAME("W:","%5lu",x);
+        c++;
+        multi_writer.unlock();
+//        multi_writer.unlock_shared();
+    }
+    
+    
 };
 
 
@@ -506,6 +541,19 @@ RC FunctionTests()
 
     p.Start();
 
+    for(size_t x = 0;x < 1000000;x++)
+    {
+        p.Async( &target, &ThreadpoolTest::MultiWriter, x);
+    }
+
+    p.Shutdown();
+    
+//    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    
+    printf("Elapsed c %lu\n",target.c.load());
+    LOG_ALWAYS("Asta........","");
+    return s_ok();
+    
 
     // Scalar Types
     //
@@ -646,9 +694,9 @@ RC FunctionTests()
     }
     LOG_ALWAYS("Phase Two Complete... %5.2lf ms",t2.delta<std::milli>());
 
-    spin_mutex          lock;
+    //spin_mutex          lock;
     //spin_barrier        lock  __attribute__ ((aligned (64)));
-    //std::mutex          lock;
+    std::mutex          lock;
 
     //std::array<int,64> bar;
 
@@ -682,26 +730,26 @@ RC FunctionTests()
             {
                 timer<double> t;
                 std::generate(v1.begin(),v1.end(), []{ return random(); });
-                LOG_UNAME("fart ","0x%.16lx Items %11lu, Time: %12.0lf us inner", v1.data(),
-                            v1.size(),t.delta());
+                LOG_UNAME("fart ","0x%.16lx Items %11lu, Time: %12.0lf us inner", v1.data(),v1.size(),t.delta());
 
                 p.Async( join, std::move(v1) );
             },
             std::move(v) );
 
-                LOG_UNAME("fart ","0x%.16lx Items %11lu, Time: %12.0lf us outer", addr, v.size(), t.delta() );
+            LOG_UNAME("fart ","0x%.16lx Items %11lu, Time: %12.0lf us outer", addr, v.size(), t.delta() );
+            
         } ) );
     }
 
-     std::this_thread::sleep_for(std::chrono::seconds(1));
+//     std::this_thread::sleep_for(std::chrono::seconds(1));
 //
 //     printf("d00d!\n");
 
     p.Shutdown();
 
-//    assert( cc == 7777777 );
+    assert( cc == 7777777 );
 
-//    LOG_ALWAYS("cc == %lu", cc.load() );
+    LOG_ALWAYS("cc == %lu", cc.load() );
 
     LOG_ALWAYS("Asta........","");
 
@@ -760,11 +808,6 @@ void App()
     LOG_ALWAYS("%s","Almost done.");
 }
 
-
-//struct
-
-
-//template<typename F,typename...TArgs>
 
 
 
