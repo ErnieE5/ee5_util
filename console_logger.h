@@ -1,7 +1,7 @@
 //-------------------------------------------------------------------------------------------------
 // Copyright (C) 2014 Ernest R. Ewert
-// 
-// Feel free to use this as you see fit. 
+//
+// Feel free to use this as you see fit.
 // I ask that you keep my name with the code.
 //
 // THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
@@ -19,6 +19,7 @@
 #include "error.h"
 #include "logging.h"
 #include "workthread.h"
+#include "static_memory_pool.h"
 
 #include <atomic>
 #include <cstdint>
@@ -45,33 +46,30 @@ struct
 //    alignas(size_t)
 LogLine
 {
-    struct Delete { void operator()(LogLine* p) { std::free(p); } };
-
-    typedef std::unique_ptr<LogLine,LogLine::Delete>        LogLinePtr;
-    typedef std::chrono::high_resolution_clock::time_point  time_point;
-    typedef std::thread::id                                 thread_id;
-
+    using time_point    = std::chrono::high_resolution_clock::time_point;
+    using thread_id     = std::thread::id;
+    using mem_pool_t    = static_memory_pool<2048,1000000>;
+    using log_line_ptr  = mem_pool_t::unique_type<LogLine>;
 
     static const size_t msg_offset;
+    static mem_pool_t   mem;
 
     time_point          time;
     const __info*       info;
     thread_id           id;
     size_t              cb_msg;
-//    alignas(size_t)
     char                msg[1];
 
-    
-
-    static RC create_buffer(size_t size,LogLinePtr& pBuffer,size_t* pcMsg = nullptr, char** ppMsg = nullptr)
+    static RC create_buffer(size_t size,log_line_ptr& pBuffer,size_t* pcMsg = nullptr, char** ppMsg = nullptr)
     {
-        char*   pBuf    = nullptr;
+        CBREx( size <= mem_pool_t::max_item_size, e_invalid_argument( 1, "size must be larger than the structure") );
 
-        CBREx( size > sizeof(LogLine), e_invalid_argument( 1, "size must be larger than the structure") );
+        do
+        {
+            pBuffer = mem.acquire_unique<LogLine>( );
+        }
+        while(!pBuffer);
 
-        CMA( pBuf = reinterpret_cast<char*>( std::malloc(size) ) );
-
-        pBuffer.reset( new(pBuf) LogLine() );
 
         if(pcMsg)
         {
@@ -91,7 +89,7 @@ LogLine
 
 
 
-typedef LogLine::LogLinePtr LogLinePtr;
+typedef typename LogLine::log_line_ptr LogLinePtr;
 
 RC cb_vsnprintf(size_t c,char* p,size_t* pc,char** ppP,const char* fmt,va_list v);
 
@@ -145,7 +143,7 @@ public:
 
     static RC Enqueue(LogLinePtr&& p)
     {
-        pThread->Enqueue( std::move( p ) );
+        pThread->Enqueue( std::forward<LogLinePtr>(p) );
 
         return s_ok();
     }

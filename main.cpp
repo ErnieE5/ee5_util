@@ -21,6 +21,9 @@
 #include "atomic_stack.h"
 #include "static_memory_pool.h"
 
+#include "stopwatch.h"
+
+
 #include <stdio.h>
 #include <cassert>
 #include <cstddef>
@@ -259,7 +262,7 @@ class TP : public i_marshal_work
 {
 
 private:
-    using mem_pool_t    = static_memory_pool<128,100000>;
+    using mem_pool_t    = static_memory_pool<128,10000>;
     using qitem_t       = std::shared_ptr<i_marshaled_call>;
     using work_thread_t = ee5::WorkThread<qitem_t>;
     using tvec_t        = std::vector<work_thread_t>;
@@ -275,7 +278,7 @@ private:
 
     mem_pool_t          mem;
     tvec_t              threads;
-    size_t              t_count = std::thread::hardware_concurrency() * 1;
+    size_t              t_count;
     std::atomic_size_t  x;
 
     struct deleter
@@ -337,24 +340,27 @@ private:
 
     RC enqueue_work(i_marshaled_call* p)
     {
-         threads[x%t_count].Enqueue( qitem_t( p, deleter(mem) ), nullptr);
+         threads[std::rand()%t_count].Enqueue( qitem_t( p, deleter(mem) ) );
+         //threads[x%t_count].Enqueue( qitem_t( p, deleter(mem) ) );
+         //threads[0].Enqueue( qitem_t( p, deleter(mem) ) );
+         //threads[random()%8].Enqueue( qitem_t( p, deleter(mem) ) );
          ++x;
          return s_ok();
     }
 
 public:
-    TP()
+    TP(size_t t = std::thread::hardware_concurrency())
     {
+        std::srand(std::time(0));
         active.lock();
 
-//        printf("t_count: %lu\n",t_count);
+        t_count = t;
 
         // Create the threads first...
         //
         for(size_t c = t_count; c ; --c)
         {
-            threads.push_back( work_thread_t( c, [](qitem_t& p){ p->Execute(); } ) );
-            printf("+%lu\n",c);
+            threads.push_back( work_thread_t( c, [](qitem_t& p) { p->Execute(); } ) );
         }
 
         // Start them.
@@ -364,39 +370,24 @@ public:
         }
     }
 
-    void Shutdown(bool abandon = false)
+    size_t Pending()
     {
         size_t s = 0;
         for(auto& k : threads)
         {
             s += k.Pending();
         }
-        
-        printf("-%lu\n",s);
-        
+        return s;
+    }
+
+    void Shutdown(bool abandon = false)
+    {
         active.lock();
 
-        s = 0;
-        for(auto& k : threads)
-        {
-            s += k.Pending();
-        }
-        
-        printf("-%lu\n",s);
-        
         for(auto& k : threads)
         {
             k.Quit();
         }
-        
-        s = 0;
-        for(auto& k : threads)
-        {
-            s += k.Pending();
-        }
-        
-        printf("-%lu\n",s);
-        
     }
 
     void Start()
@@ -404,13 +395,16 @@ public:
         active.unlock();
     }
 
+    size_t Count()
+    {
+        return t_count;
+    }
 
 
 };
 
 
-TP p;
-
+extern TP p;
 
 #include <functional>
 
@@ -483,7 +477,7 @@ struct ThreadpoolTest
 
     void CalcFactorial(unsigned long n)
     {
-        timer<> taft;
+        us_stopwatch_d taft;
         long double f = Factorial(n);
 
         for(unsigned long h = n;h > 2;h--)
@@ -496,31 +490,63 @@ struct ThreadpoolTest
         }
 
 
-        LOG_ALWAYS("n: %2lu value: %26.0Lf %5.0f us",n, Factorial(n),taft.delta<std::micro>() );
+        LOG_ALWAYS("n: %2lu value: %26.0Lf %8lu us",n, Factorial(n),taft.delta<std::micro>() );
     }
 
-    std::atomic_size_t c;
-    //size_t c = 0;
-    std::array<int,100> x1;
-    //std::mutex  multi_writer;
-    //spin_barrier multi_writer;
-    spin_shared_mutex<> multi_writer;
-    //spin_mutex multi_writer;
-    std::array<int,100> x2;
-    
-    void MultiWriter(size_t x)
-    {
-//        multi_writer.lock_shared();
-        multi_writer.lock();
-//        LOG_UNAME("W:","%5lu",x);
-        c++;
-        multi_writer.unlock();
-//        multi_writer.unlock_shared();
-    }
-    
-    
 };
 
+
+
+
+template<typename L,size_t iterations = 8000000>
+void run_lock_test(TP& p)
+{
+    us_stopwatch_f  timer;
+    L               lock;
+    size_t          a = 0;
+    size_t          c = 0;
+    long double     d = 0;
+    size_t          f[100] = { };
+
+    for(size_t x = 0;x < iterations;++x)
+    {
+        p.Async( [&](size_t x)
+        {
+            static thread_local size_t g = a++;
+            long double ttf  = 0;
+
+            for(size_t q = 0;q < 100;q++)
+            {
+                ttf += ThreadpoolTest::Factorial(q*2);
+            }
+
+            lock.lock();
+
+            ++c;
+            f[g]++;
+            d += ttf;
+
+            lock.unlock();
+
+        },x);
+    }
+
+    while(p.Pending());
+
+    printf("Elapsed %-25.25s %12.6f s %lu / ",typeid(lock).name(), timer.delta<std::ratio<1>>(),c);
+    for(size_t b = 0;b < p.Count() ;b++)
+    {
+        printf("%2lu:%9lu ",b,f[b]);
+    }
+    printf("\n"); fflush(stdout);
+}
+
+
+
+
+size_t threads = 8;
+
+TP p(threads);
 
 
 //---------------------------------------------------------------------------------------------------------------------
@@ -530,30 +556,26 @@ struct ThreadpoolTest
 //
 RC FunctionTests()
 {
-    LOG_FRAME(0,"Thread pool %s","test!");
-    LOG_ALWAYS("%s","testing...");
+    // LOG_FRAME(0,"Thread pool %s","test!");
+    // LOG_ALWAYS("%s","testing...");
 
     ThreadpoolTest  target;
     int             int_local       = 55555;
     double          double_local    = 55.555;
 
-    timer<> t;
+    us_stopwatch_f t;
+
 
     p.Start();
 
-    for(size_t x = 0;x < 1000000;x++)
-    {
-        p.Async( &target, &ThreadpoolTest::MultiWriter, x);
-    }
+    run_lock_test<std::mutex>           (p);
+    run_lock_test<spin_mutex>           (p);
+    run_lock_test<spin_barrier>         (p);
+    run_lock_test<spin_shared_mutex<>>  (p);
 
     p.Shutdown();
-    
-//    std::this_thread::sleep_for(std::chrono::milliseconds(100));
-    
-    printf("Elapsed c %lu\n",target.c.load());
-    LOG_ALWAYS("Asta........","");
     return s_ok();
-    
+
 
     // Scalar Types
     //
@@ -680,19 +702,19 @@ RC FunctionTests()
 
     LOG_ALWAYS("Starting...","");
 
-    timer<> t1;
+    us_stopwatch_f t1a;
     for(size_t g = 0;g < 2525252; g++)
     {
         CRR( p.Async( q, 3, g*.3, g ) );
     }
-    LOG_ALWAYS("Phase One Complete... %5.2lf ms",t1.delta<std::milli>());
+    LOG_ALWAYS("Phase One Complete... %5.2lf ms",t1a.delta<std::milli>());
 
-    timer<> t2;
+    us_stopwatch_f t2a;
     for(size_t g = 0;g < 5252524; g++)
     {
         CRR( p.Async( q, 4, g*.4, g ) );
     }
-    LOG_ALWAYS("Phase Two Complete... %5.2lf ms",t2.delta<std::milli>());
+    LOG_ALWAYS("Phase Two Complete... %5.2lf ms",t2a.delta<std::milli>());
 
     //spin_mutex          lock;
     //spin_barrier        lock  __attribute__ ((aligned (64)));
@@ -703,7 +725,7 @@ RC FunctionTests()
     std::list<size_t>   complete;
     auto join = [&lock,&complete](std::vector<int> add)
     {
-        timer<> x;
+        us_stopwatch_f x;
         framed_lock( lock, [&add,&complete]()
         {
             complete.push_back( add.size() );
@@ -720,7 +742,7 @@ RC FunctionTests()
     {
         CRR( p.Async( [size,&join]
         {
-            timer<double> t;
+            us_stopwatch_f t;
 
             std::vector<int> v( size );
 
@@ -728,16 +750,16 @@ RC FunctionTests()
 
             p.Async( [&](std::vector<int> v1)
             {
-                timer<double> t;
+                us_stopwatch_f t;
                 std::generate(v1.begin(),v1.end(), []{ return random(); });
-                LOG_UNAME("fart ","0x%.16lx Items %11lu, Time: %12.0lf us inner", v1.data(),v1.size(),t.delta());
+                LOG_UNAME("fart ","0x%.16lx Items %11lu, Time: %12.0f us inner", v1.data(),v1.size(),t.delta());
 
                 p.Async( join, std::move(v1) );
             },
             std::move(v) );
 
-            LOG_UNAME("fart ","0x%.16lx Items %11lu, Time: %12.0lf us outer", addr, v.size(), t.delta() );
-            
+            LOG_UNAME("fart ","0x%.16lx Items %11lu, Time: %12.0f us outer", addr, v.size(), t.delta() );
+
         } ) );
     }
 
@@ -791,21 +813,21 @@ RC FunctionTests()
 //
 void App()
 {
-    LOG_FRAME(0,"Hello!","");
-    {
-        LOG_FRAME(0,"Embedded frame..","");
-        LOG_ALWAYS("互いに同胞の精神を%s","もって行動しなければならない。");
-    }
+    // LOG_FRAME(0,"Hello!","");
+    // {
+    //     LOG_FRAME(0,"Embedded frame..","");
+    //     LOG_ALWAYS("互いに同胞の精神を%s","もって行動しなければならない。");
+    // }
 
-    timer<>   taft;
+    s_stopwatch_d taft;
 
     FunctionTests();
-    LOG_ALWAYS("Elapsed Time: %lg seconds.",taft.delta<std::ratio<1>>() );
+    printf("Elapsed Time: %.6lf seconds.\n",taft.delta() );
 
-    LOG_ALWAYS("%s","互いに同胞の精神をもって行動しなければならない。");
-    LOG_ALWAYS("%s","请以手足关系的精神相对待");
+    // LOG_ALWAYS("%s","互いに同胞の精神をもって行動しなければならない。");
+    // LOG_ALWAYS("%s","请以手足关系的精神相对待");
 
-    LOG_ALWAYS("%s","Almost done.");
+    // LOG_ALWAYS("%s","Almost done.");
 }
 
 
@@ -947,6 +969,17 @@ void T1()
 
 
 
+
+template<typename T = us_stopwatch_d >
+frame_stopwatch<T> time_frame( std::function<void(typename T::value_type)>&& f )
+{
+    return frame_stopwatch<T>( std::move(f) );
+}
+
+
+
+
+
 //-------------------------------------------------------------------------------------------------
 //
 //
@@ -954,17 +987,51 @@ void T1()
 //
 int main()
 {
+    int iRet = ee5::Startup(0,nullptr);
 //     T1();
 //     p.Start();
 //     p.Shutdown();
 
 //   Moink();
 //   int iRet = 0;
-    int iRet = ee5::Startup(0,nullptr);
 
     if( iRet == 0 )
     {
-        App();
+        {
+        LOG_FRAME(0,"Hey Ernie!","");
+
+        using ft = frame_stopwatch<us_stopwatch_f>;
+
+        ft _a( [](float d) { printf("A: It took %.3f ms\n", d); } );
+        auto _b = time_frame<us_stopwatch_s>( [](size_t d) { printf("B: It took %lu us\n",d); } );
+
+        auto _1 = time_frame<us_stopwatch_d>( [](double d) { printf("_1: %20.0f us\n",d); } );
+        auto _2 = time_frame<ms_stopwatch_d>( [](double d) { printf("_2: %20.3f ms\n",d); } );
+        auto _3 = time_frame< s_stopwatch_d>( [](double d) { printf("_3: %20.6f s \n",d); } );
+        auto _4 = time_frame< m_stopwatch_d>( [](double d) { printf("_4: %20.9f m \n",d); } );
+        auto _5 = time_frame< h_stopwatch_d>( [](double d) { printf("_5: %20.9f h \n",d); } );
+
+        stopwatch       _c;
+        m_stopwatch_f   _d;
+
+    //    std::this_thread::sleep_for( std::chrono::seconds(60) );
+
+        p.Start();
+        p.Shutdown();
+
+        float c = _c.delta<std::micro,float>();
+
+        printf("C: %.3f \n",c);
+        printf("D: %.9f m\n",_d.delta());
+
+        printf("    %20.0f us\n",_d.delta<std::micro>());
+        printf("    %20.3f ms\n",_d.delta<std::milli>());
+        printf("    %20.6f s\n", _d.delta<std::ratio<1>>());
+        printf("    %20.9f m\n", _d.delta<std::ratio<60>>());
+        printf("    %20.9f h\n", _d.delta<std::ratio<3600>>());
+        }
+
+//        App();
 
         LOG_ALWAYS("Goodbye...","");
 

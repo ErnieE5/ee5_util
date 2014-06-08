@@ -16,9 +16,12 @@
 #ifndef EE5_LOGGING_H_
 #define EE5_LOGGING_H_
 
+#include "stopwatch.h"
+
 #include <cstdint>
 #include <cstddef>
 #include <cstdlib>
+
 
 namespace ee5
 {
@@ -60,14 +63,15 @@ extern program_log __ee5_log;
 #define LOG_MSG   (zone,        fmt,...) _TRACE(fmt,__VA_ARGS__)
 
 #define FRAME_EXIT() \
-        static const ee5::__info ___ = { 0, FUNCTION_NAME, LOG_FACILITY, __FILE__, " } // Frame Exit", __LINE__ }; \
-        struct _                        \
-        {                               \
-            ~_()                        \
-            {                           \
-                ee5::__ee5_log(&___); \
-            }                           \
-        } __                            \
+        static const ee5::__info ___ = { 0, FUNCTION_NAME, LOG_FACILITY, __FILE__, " } // %.6f s", __LINE__ }; \
+        struct _                                \
+        {                                       \
+            s_stopwatch_d s;                    \
+            ~_()                                \
+            {                                   \
+                ee5::__ee5_log(&___,s.delta()); \
+            }                                   \
+        } __                                    \
 
 
 #define LOG_FRAME(zone,fmt,...) \

@@ -1,7 +1,7 @@
 //-------------------------------------------------------------------------------------------------
 // Copyright (C) 2014 Ernest R. Ewert
-// 
-// Feel free to use this as you see fit. 
+//
+// Feel free to use this as you see fit.
 // I ask that you keep my name with the code.
 //
 // THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
@@ -33,7 +33,7 @@ ConsoleLogger::thread_ptr ConsoleLogger::pThread;
 RC cb_vsnprintf(size_t c,char* p,size_t* pc,char** ppP,const char* fmt,va_list v)
 {
     int i = std::vsnprintf(p,c,fmt,v);
-    
+
     if( i < 0 || i > c )
     {
         return e_overflow();
@@ -45,7 +45,7 @@ RC cb_vsnprintf(size_t c,char* p,size_t* pc,char** ppP,const char* fmt,va_list v
     return s_ok();
 }
 
-
+LogLine::mem_pool_t LogLine::mem;
 
 //---------------------------------------------------------------------------------------------------------------------
 //
@@ -63,7 +63,7 @@ void ConsoleLogger::console_log(const __info* i,...)
 
     LogLinePtr pLogLine;
 
-    rc = LogLine::create_buffer( 4096, pLogLine,&c, &p );
+    rc = LogLine::create_buffer( LogLine::mem_pool_t::max_item_size, pLogLine,&c, &p );
 
     if( rc == s_ok() )
     {

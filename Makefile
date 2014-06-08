@@ -21,6 +21,7 @@ SYMBOLS=-g
 
 FARGUMENTS:= \
 #	no-rtti \
+#	sanitize=thread \
 	no-exceptions
 
 LIBRARY_PATHS:=\

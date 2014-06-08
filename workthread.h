@@ -30,58 +30,6 @@
 namespace ee5
 {
 
-//---------------------------------------------------------------------------------------------------------------------
-//
-//
-//
-//
-template<typename T = float,typename C = std::chrono::high_resolution_clock>
-class timer
-{
-private:
-    std::chrono::time_point<C> start;
-
-public:
-    timer()
-    {
-        start = C::now();
-    }
-
-    template<typename R = std::micro,typename D = std::chrono::duration< T, R > >
-    T delta()
-    {
-        return D(C::now() - start).count();
-    }
-};
-
-
-// class frame_timer
-// {
-// private:
-//     template< typename F, typename ...TArgs >
-//     class frame_marker
-//     {
-//     private:
-//         std::function<F(TArgs...)> doit;
-//     public:
-//         frame_marker(F f,TArgs... args) : doit(f,...args){}
-//         ~frame_marker()
-//         {
-//             
-//         }
-//     };
-//     
-//     
-// protected:
-// public:
-//     frame_timer(
-//         
-// };
-// 
-// template<typename F,typename ...TArgs>
-
-
-
 
 //---------------------------------------------------------------------------------------------------------------------
 //
@@ -122,13 +70,12 @@ public:
         barrier = false;
     }
 
-    void lock(bool yield = true)
+    void lock()
     {
         bool expected = false;
         while( ! barrier.compare_exchange_strong( expected, true, acquire, relaxed ) )
         {
             expected = false;
-            if( yield ) std::this_thread::yield();
         }
     }
 
@@ -154,7 +101,7 @@ struct is_64_bit
     using  value_type   = uint_fast64_t;
     using  barrier_type = std::atomic_uint_fast64_t;
 
-    
+
     static constexpr value_type addend_exclusive    = 0x0000100000000000;
     static constexpr value_type mask_exclusive      = 0x0FFFF00000000000;
     static constexpr value_type addend_shared       = 0x0000000000000010;
@@ -164,10 +111,10 @@ struct is_64_bit
 struct is_32_bit
 {
 //    static const bool value = sizeof(void*) == sizeof(uint32_t);
-// 
+//
 //     using  value_type   = uint_fast32_t;
 //     using  barrier_type = std::atomic_uint_fast32_t;
-//     
+//
 //     static constexpr value_type exclusive_addend    = 0x00100000;
 //     static constexpr value_type maximum_exclusive   = 0xFFF00000;
 //     static constexpr value_type maximum_shared      = 0x0000FFFF;
@@ -201,8 +148,8 @@ public:
     // Notes on the write lock. Th
     void lock()
     {
-        // Spin until we acquire the write lock. Which we know is "ours" because 
-        // no one else owned it before. 
+        // Spin until we acquire the write lock. Which we know is "ours" because
+        // no one else owned it before.
         //
         storage_t ex;
         while( ( ex = barrier.fetch_add(addend_exclusive,release) & mask_exclusive ) > 0 )
@@ -211,7 +158,6 @@ public:
 
             for(;ex&mask_exclusive;ex -= addend_exclusive)
             {
-                //printf("!\n");
                 std::this_thread::yield();
             }
         }
@@ -228,7 +174,7 @@ public:
 
     bool try_lock()
     {
-        // The only way this can succeed is if ALL writers and all readers 
+        // The only way this can succeed is if ALL writers and all readers
         // are not doing anything, which means that the value in the barrier
         // had to be zero.
         //
@@ -244,13 +190,11 @@ public:
 
     void lock_shared()
     {
-        // So "take" the lock, 
+        // So "take" the lock,
         //
-        if( (++barrier & mask_shared) > mask_shared )
-//        if( barrier.fetch_add(1,acquire) > maximum_shared )
+        if( ++barrier & mask_exclusive )
         {
-            printf("Elapsed Fuck!\n");
-            // but spin until a "max read" slot is availble OR while a writer 
+            // but spin until a "max read" slot is available OR while a writer
             // has the lock OR is waiting for readers to finish.
             //
             while( barrier.load(acquire) & mask_exclusive );
@@ -265,7 +209,7 @@ public:
     bool try_lock_shared()
     {
         barrier.fetch_add(addend_shared);
-        
+
         bool owned = ( ( barrier.load() & mask_shared ) <= mask_shared );
 
         if(!owned)
@@ -288,8 +232,8 @@ public:
 template<typename L,typename F,typename...TArgs>
 void framed_lock(L& _mtx,F _f,TArgs...args)
 {
-    //std::lock_guard<L> __lock(_mtx);
-    std::unique_lock<L> __lock(_mtx);
+    std::lock_guard<L> __lock(_mtx);
+    //std::unique_lock<L> __lock(_mtx);
     return _f(args...);
 }
 
@@ -364,6 +308,8 @@ private:
     work_queue      queue;
     bool            quit    = false;
     bool            abandon = false;
+    std::atomic_size_t pending;
+
 
     void Process(work_queue& items)
     {
@@ -371,6 +317,7 @@ private:
         {
             method( items.front() );
             items.pop();
+            --pending;
         }
     }
 
@@ -389,22 +336,13 @@ private:
                     work_to_do.push( std::move( queue.front() ) );
                     queue.pop();
                 }
+
+                pending += work_to_do.size();
+
             } );
 
-
-            {
-                timer<> taft;
-                size_t s = work_to_do.size();
-                Process( work_to_do );
-                auto milli = taft.delta<std::milli>();
-                if(milli > 1000)
-                {
-                    LOG_UNAME("Thread", "%lu : %6lu/%6lu : %3.2f ms",user_id,s,queue.size(),milli );
-                }
-            }
+            Process( work_to_do );
         }
-
-
 
         if( !abandon && queue.size() )
         {
@@ -428,6 +366,8 @@ public:
     {
         thread = std::thread( thread_method( this, &WorkThread::Thread ) );
 
+//        printf("hh %lu\n",user_id);
+
         return 0;
     }
 
@@ -439,7 +379,7 @@ public:
     size_t Pending()
     {
         frame_lock _lock(data_lock);
-        return queue.size();
+        return queue.size() + pending;
     }
 
     void Quit(bool join = true)
