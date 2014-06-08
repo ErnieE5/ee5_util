@@ -22,9 +22,21 @@
 //-------------------------------------------------------------------------------------------------
 // The C++11 chrono namespace is very complete, but tends to be highly verbose to use.
 //
-//	This header has a few useful declarations to help make things considerably simpler (IMO) for
-//  creating timed sections of code.
+//  This header has a few useful declarations to help make things considerably simpler (IMO) for
+//  creating timed sections of code. 
 //
+#if 0
+void stopwatch_example()
+{
+    us_stopwatch_s sw; // Microseconds with a default size_t value from delta()
+    
+    // Do some interesting stuff...
+    
+    printf("\nfinal %3lu\n",sw.delta());
+}
+#endif    
+
+
 namespace ee5
 {
 
@@ -73,19 +85,20 @@ public:
     {
         start = C::now(); // Capture the timer value
     }
-
+    
     template<typename DP = period,typename DT = value_type >
     DT delta()
     {
         using namespace std::chrono;
+        using dur = std::chrono::duration<DT,DP>;
 
         //  This is the fun part (and the part that typically would be verbose)
         //
-        return duration_cast< duration<DT,DP> >( C::now() - start ).count();
-        //     |              |                  ^^^^^^^^^^^^^^^^   |
-        //     |              |                  |                  The final value.
-        //     |              |                  |
-        //     |              |                  Delta between two time_points
+        return duration_cast< dur >( C::now() - start ).count();
+        //     |              |      ^^^^^^^^^^^^^^^^   |
+        //     |              |      |                  The final value.
+        //     |              |      |
+        //     |              |      Delta between two time_points
         //     |              |
         //     |              The conversion from time_point to the type of counter
         //     |              to use.
@@ -94,6 +107,17 @@ public:
         //     microseconds and the type is unsigned with a period of seconds, the
         //     values returned would be the unsigned number of seconds elapsed.
     }
+    
+    value_type operator()()
+    {
+        return delta();
+    }
+    
+    typename C::duration duration()
+    {
+        return C::now() - start;
+    }
+    
 };
 
 // The following declarations help simplify getting the time presented in
@@ -145,27 +169,6 @@ using m_stopwatch_s     = m_stopwatch<size_t>;  // printf("%lu",   t.delta() );
 using h_stopwatch_f     = h_stopwatch<float>;   // %.0f
 using h_stopwatch_d     = h_stopwatch<double>;  // %.0lf
 using h_stopwatch_s     = h_stopwatch<size_t>;  // printf("%lu",   t.delta() );
-
-using stopwatch = us_stopwatch_d;
-
-template<typename B = stopwatch >
-class frame_stopwatch : B
-{
-private:
-    std::function<void(typename B::value_type)> at_end_frame;
-protected:
-public:
-    frame_stopwatch(std::function<void(typename B::value_type)>&& f) : at_end_frame( f )
-    {
-    }
-    ~frame_stopwatch()
-    {
-        at_end_frame( B::delta() );
-    }
-};
-
-
-
 
 }       // namespace ee5
 #endif  // EE5_STOPWATCH_H_

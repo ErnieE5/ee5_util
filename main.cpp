@@ -498,10 +498,10 @@ struct ThreadpoolTest
 
 
 
-template<typename L,size_t iterations = 8000000>
+template<typename L,size_t iterations = 800000>
 void run_lock_test(TP& p)
 {
-    us_stopwatch_f  timer;
+    s_stopwatch_f   sw;
     L               lock;
     size_t          a = 0;
     size_t          c = 0;
@@ -533,7 +533,7 @@ void run_lock_test(TP& p)
 
     while(p.Pending());
 
-    printf("Elapsed %-25.25s %12.6f s %lu / ",typeid(lock).name(), timer.delta<std::ratio<1>>(),c);
+    printf("Elapsed %-25.25s %12.6f s %lu / ",typeid(lock).name(), sw.delta(), c);
     for(size_t b = 0;b < p.Count() ;b++)
     {
         printf("%2lu:%9lu ",b,f[b]);
@@ -560,20 +560,16 @@ RC FunctionTests()
     // LOG_ALWAYS("%s","testing...");
 
     ThreadpoolTest  target;
-    int             int_local       = 55555;
+    int             int_local       = 1350;
     double          double_local    = 55.555;
 
-    us_stopwatch_f t;
+    static constexpr size_t iterations = 80000000;
+    
+    run_lock_test<std::mutex,iterations>           (p);
+    run_lock_test<spin_mutex,iterations>           (p);
+    run_lock_test<spin_barrier,iterations>         (p);
+    run_lock_test<spin_shared_mutex<>,iterations>  (p);
 
-
-    p.Start();
-
-    run_lock_test<std::mutex>           (p);
-    run_lock_test<spin_mutex>           (p);
-    run_lock_test<spin_barrier>         (p);
-    run_lock_test<spin_shared_mutex<>>  (p);
-
-    p.Shutdown();
     return s_ok();
 
 
@@ -813,21 +809,18 @@ RC FunctionTests()
 //
 void App()
 {
-    // LOG_FRAME(0,"Hello!","");
-    // {
-    //     LOG_FRAME(0,"Embedded frame..","");
-    //     LOG_ALWAYS("互いに同胞の精神を%s","もって行動しなければならない。");
-    // }
-
-    s_stopwatch_d taft;
-
+    h_stopwatch_d sw;
+    
+    p.Start();
+    
     FunctionTests();
-    printf("Elapsed Time: %.6lf seconds.\n",taft.delta() );
 
+    p.Shutdown();
+    
     // LOG_ALWAYS("%s","互いに同胞の精神をもって行動しなければならない。");
     // LOG_ALWAYS("%s","请以手足关系的精神相对待");
 
-    // LOG_ALWAYS("%s","Almost done.");
+    LOG_ALWAYS("Elapsed time %.6f h",sw.delta());
 }
 
 
@@ -970,12 +963,23 @@ void T1()
 
 
 
-template<typename T = us_stopwatch_d >
-frame_stopwatch<T> time_frame( std::function<void(typename T::value_type)>&& f )
+void test_stopwatch()
 {
-    return frame_stopwatch<T>( std::move(f) );
-}
+    ms_stopwatch_s  _a; // A Default millisecond stopwatch with size_t values
+    m_stopwatch_f   _b;
+    
+    float c = _a.delta<std::micro,float>();
 
+    printf("A: %12lu ms\n",   _a.delta() );
+    printf("B: %12.9f m\n",   _b.delta());
+    printf("C: %12.3f us\n",  c);
+    
+    printf("B: %12.0f us\n",_b.delta<std::micro>());
+    printf("B: %12.3f ms\n",_b.delta<std::milli>());
+    printf("B: %12.6f s\n", _b.delta<std::ratio<1>>());
+    printf("B: %12.9f m\n", _b.delta<std::ratio<60>>());
+    printf("B: %12.9f h\n", _b.delta<std::ratio<3600>>());
+}
 
 
 
@@ -988,50 +992,11 @@ frame_stopwatch<T> time_frame( std::function<void(typename T::value_type)>&& f )
 int main()
 {
     int iRet = ee5::Startup(0,nullptr);
-//     T1();
-//     p.Start();
-//     p.Shutdown();
-
-//   Moink();
-//   int iRet = 0;
 
     if( iRet == 0 )
     {
-        {
-        LOG_FRAME(0,"Hey Ernie!","");
-
-        using ft = frame_stopwatch<us_stopwatch_f>;
-
-        ft _a( [](float d) { printf("A: It took %.3f ms\n", d); } );
-        auto _b = time_frame<us_stopwatch_s>( [](size_t d) { printf("B: It took %lu us\n",d); } );
-
-        auto _1 = time_frame<us_stopwatch_d>( [](double d) { printf("_1: %20.0f us\n",d); } );
-        auto _2 = time_frame<ms_stopwatch_d>( [](double d) { printf("_2: %20.3f ms\n",d); } );
-        auto _3 = time_frame< s_stopwatch_d>( [](double d) { printf("_3: %20.6f s \n",d); } );
-        auto _4 = time_frame< m_stopwatch_d>( [](double d) { printf("_4: %20.9f m \n",d); } );
-        auto _5 = time_frame< h_stopwatch_d>( [](double d) { printf("_5: %20.9f h \n",d); } );
-
-        stopwatch       _c;
-        m_stopwatch_f   _d;
-
-    //    std::this_thread::sleep_for( std::chrono::seconds(60) );
-
-        p.Start();
-        p.Shutdown();
-
-        float c = _c.delta<std::micro,float>();
-
-        printf("C: %.3f \n",c);
-        printf("D: %.9f m\n",_d.delta());
-
-        printf("    %20.0f us\n",_d.delta<std::micro>());
-        printf("    %20.3f ms\n",_d.delta<std::milli>());
-        printf("    %20.6f s\n", _d.delta<std::ratio<1>>());
-        printf("    %20.9f m\n", _d.delta<std::ratio<60>>());
-        printf("    %20.9f h\n", _d.delta<std::ratio<3600>>());
-        }
-
-//        App();
+        //test_stopwatch();
+        App();
 
         LOG_ALWAYS("Goodbye...","");
 

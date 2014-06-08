@@ -66,7 +66,7 @@ extern program_log __ee5_log;
         static const ee5::__info ___ = { 0, FUNCTION_NAME, LOG_FACILITY, __FILE__, " } // %.6f s", __LINE__ }; \
         struct _                                \
         {                                       \
-            s_stopwatch_d s;                    \
+            s_stopwatch_f s;                    \
             ~_()                                \
             {                                   \
                 ee5::__ee5_log(&___,s.delta()); \

@@ -48,7 +48,7 @@ LogLine
 {
     using time_point    = std::chrono::high_resolution_clock::time_point;
     using thread_id     = std::thread::id;
-    using mem_pool_t    = static_memory_pool<2048,1000000>;
+    using mem_pool_t    = static_memory_pool<2048,1000>;
     using log_line_ptr  = mem_pool_t::unique_type<LogLine>;
 
     static const size_t msg_offset;
