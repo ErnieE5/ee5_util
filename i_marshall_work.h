@@ -1,7 +1,7 @@
 //-------------------------------------------------------------------------------------------------
 // Copyright (C) 2014 Ernest R. Ewert
-// 
-// Feel free to use this as you see fit. 
+//
+// Feel free to use this as you see fit.
 // I ask that you keep my name with the code.
 //
 // THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
@@ -16,9 +16,9 @@
 #ifndef I_MARSHALL_WORK_H_
 #define I_MARSHALL_WORK_H_
 
-namespace ee5 
+namespace ee5
 {
-    
+
 //---------------------------------------------------------------------------------------------------------------------
 // i_marshal_work
 //
@@ -27,10 +27,10 @@ namespace ee5
 class i_marshal_work
 {
 private:
-    virtual RC      lock()                              = 0;
+    virtual bool    lock()                              = 0;
     virtual void    unlock()                            = 0;
     virtual RC      get_storage(size_t size,void** p)   = 0;
-    virtual RC      enqueue_work(i_marshaled_call *)    = 0;    
+    virtual RC      enqueue_work(i_marshaled_call *)    = 0;
 
     // This turns non-scaler types into references in the function signature. Copy semantics
     // can be extraordinarily expensive and while we need to make a copy of the values during the
@@ -46,43 +46,30 @@ private:
         /* else */  typename std::add_lvalue_reference<Arg>::type
         >::type value_type;
     };
-    
-    template<typename T>
-    RC __lock_get(T** ppS)
-    {
-        RC rc = lock();
-        
-        if( rc == s_ok() )
-        {
-            rc = get_storage( sizeof(T), reinterpret_cast<void**>(ppS) );
-        }
-            
-        return rc;
-    }
+
 
     template< typename B, typename M, typename ...TArgs >
     RC __enqueue(B&& binder,TArgs&&...args)
     {
-        M* call = nullptr;
-        
-        RC rc = __lock_get<M>(&call);
-        
-        if( rc == s_ok() )
+        RC   rc     = e_pool_terminated();
+        M*   call   = nullptr;
+
+        if( lock() )
         {
-            new(call) M( binder, args... );
-            
-            rc = enqueue_work(call);
-            
+            rc = get_storage( sizeof(M), reinterpret_cast<void**>(&call) );
+
+            if( rc == s_ok() )
+            {
+                rc = enqueue_work( new(call) M( binder, args... ) );
+            }
+
             unlock();
         }
-        
+
         return rc;
     }
-    
-public:
 
-    
-    
+public:
     // Call a member function of a class in the context of a thread pool thread
     // with zero or more arguments with rvalue semantics.
     //
@@ -92,19 +79,19 @@ public:
         using binder_t = object_method_delegate<O,void,typename ref_val<TArgs>::value_type...>;
         using method_t = marshaled_call<binder_t,typename std::remove_reference<TArgs>::type...>;
 
-// TODO: explore      
+// TODO: explore
 // std::bind could also work with something like...
 //
 // decltype( std::bind( std::declval<PM>(), std::declval<PO>(), std::declval<TArgs>() ... ) ) binder;
-//        
-//      
+//
+//
 //         decltype(std::bind(pM,pO,args...)) j = std::bind(pM,pO,args...);
 //         auto b = std::bind(pM,pO,args...);
 //         printf("M: %lu --std::bind\n",sizeof(b));
 
         return __enqueue<binder_t,method_t>( binder_t(pO,pM), args... );
     }
-    
+
     // Call a member function of a class in the context of a thread pool thread
     // with zero or more arguments that are constant lvalue types
     //
@@ -113,10 +100,10 @@ public:
     {
         using binder_t = object_method_delegate<O,void,typename ref_val<TArgs>::value_type...>;
         using method_t = marshaled_call<binder_t,typename std::remove_reference<TArgs>::type...>;
-        
+
         return __enqueue<binder_t,method_t>( binder_t(pO,pM), args... );
     }
-    
+
     // Call any function or functor that can compile to a void(void) signature
     //
     template<typename TFunction>
@@ -125,10 +112,10 @@ public:
         using binder_t = std::function< void() >;
         using method_t = marshaled_call< std::function< void() > >;
 
-        return __enqueue<binder_t,method_t>( f );        
+        return __enqueue<binder_t,method_t>( f );
     }
-    
-    
+
+
     // This is a little of a mess. In order to support lambda expressions
     // We need to distinguish between the pointer to a member function and the first argument of the lambda.
     // This has the "messed up" side effect that a lambda expression can not pass a pointer to a
@@ -153,22 +140,22 @@ public:
             (
                 ! std::is_member_function_pointer<TArg1>::value
             ),
-            TFunction 
-        >::type 
+            TFunction
+        >::type
     >
     RC Async(TFunction f,TArg1 a,TArgs&&...args)
     {
         using binder_t = std::function<void(TArg1,typename ref_val<TArgs>::value_type...)>;
         using method_t = marshaled_call<binder_t,TArg1,typename std::remove_reference<TArgs>::type...>;
-        
+
         return __enqueue<binder_t,method_t>( f, a, args... );
     }
-    
+
 };
 
-    
-    
-    
-    
+
+
+
+
 }       // namespace ee5
 #endif  // I_MARSHALL_WORK_H_

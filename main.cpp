@@ -250,6 +250,107 @@ struct pool_allocator
     };
 };
 
+#include <sys/mman.h>
+#include <unistd.h>
+#include <pthread.h>
+
+template< int IS, int IC, int A = cache_alignment_intel_x86_64 >
+class growing_memory_pool : private static_memory_pool<IS,IC,A>
+{
+private:
+    // This internal structure is mostly notational to avoid overuse of
+    // casting between the various usage of the memory.
+    //
+    struct pool_buffer
+    {
+        // When the buffer has been acquired by the user the entire byte range
+        // between the base and base+item_size is "yours to use" as if you called
+        // calloc(1,item_size);
+        //
+        // When the buffer (memory region) is "owned" by the cache, the member next is
+        // used for storage of items below in the stack,
+        //
+        union
+        {
+            unsigned char data[IS] __attribute__ ((aligned (A)));
+            pool_buffer*  next;
+        };
+    };
+
+
+public:
+    static const size_t max_item_size   = IS;
+    static const size_t max_item_count  = IC;
+    static const size_t cache_alignment = A;
+    static const size_t pool_size       = IC * sizeof(pool_buffer);
+
+    growing_memory_pool()
+    {
+        printf("_SC_LEVEL1_ICACHE_LINESIZE %lu\n",sysconf(_SC_LEVEL1_ICACHE_LINESIZE));
+        printf("_SC_LEVEL1_DCACHE_LINESIZE %lu\n",sysconf(_SC_LEVEL1_DCACHE_LINESIZE));
+        printf("_SC_LEVEL2_CACHE_LINESIZE  %lu\n",sysconf(_SC_LEVEL2_CACHE_LINESIZE));
+        printf("_SC_LEVEL3_CACHE_LINESIZE  %lu\n",sysconf(_SC_LEVEL3_CACHE_LINESIZE));
+        printf("_SC_LEVEL4_CACHE_LINESIZE  %lu\n",sysconf(_SC_LEVEL4_CACHE_LINESIZE));
+        printf("_SC_READER_WRITER_LOCKS    %lu\n",sysconf(_SC_READER_WRITER_LOCKS));
+        printf("_SC_CLOCK_SELECTION        %lu\n",sysconf(_SC_CLOCK_SELECTION));
+
+//
+
+// pthread_condattr_t attr;
+// __clockid_t clock_id;
+// int ret;
+
+// ret = pthread_condattr_getclock(&attr &clock_id);
+
+        char data[1000];
+        confstr(_CS_GNU_LIBC_VERSION,data,sizeof(data));
+        printf("_CS_GNU_LIBC_VERSION %s\n",data);
+
+        confstr(_CS_GNU_LIBPTHREAD_VERSION,data,sizeof(data));
+        printf("_CS_GNU_LIBPTHREAD_VERSION %s\n",data);
+
+        confstr(_CS_PATH,data,sizeof(data));
+        printf("_CS_PATH %s\n",data);
+
+        confstr(_CS_POSIX_V7_LP64_OFF64_CFLAGS,data,sizeof(data));
+        printf("_CS_POSIX_V7_LP64_OFF64_CFLAGS %s\n",data);
+
+        confstr(_CS_V7_ENV,data,sizeof(data));
+        printf("_CS_V7_ENV %s\n",data);
+
+
+
+        size_t g = (sysconf(_SC_PAGESIZE)/sizeof(pool_buffer)   );
+
+        printf("%16lx  %lu\n",pool_size,g);
+
+
+
+        void* pmem = mmap(0,g*100,PROT_READ|PROT_WRITE, MAP_ANON|MAP_SHARED,-1,0);
+
+        printf("%16lx\n",pmem);
+    }
+
+
+    void release(void* buffer)
+    {
+        static_memory_pool<IS,IC,A>::release(buffer);
+    }
+
+
+    void* acquire()
+    {
+        return static_memory_pool<IS,IC,A>::acquire();
+    }
+
+};
+
+
+void grow_test()
+{
+    growing_memory_pool<128,10000> d;
+
+}
 
 
 
@@ -260,45 +361,42 @@ struct pool_allocator
 //
 class TP : public i_marshal_work
 {
-
 private:
     using mem_pool_t    = static_memory_pool<128,10000>;
-    using qitem_t       = std::shared_ptr<i_marshaled_call>;
-    using work_thread_t = ee5::WorkThread<qitem_t>;
-    using tvec_t        = std::vector<work_thread_t>;
-
-    //using framed_lock_t = framed_lock<spin_mutex>;
-
-    spin_mutex          termination_;
-
-//    std::atomic_flag    active;
-
-    spin_shared_mutex<> active;
-
-
-    mem_pool_t          mem;
-    tvec_t              threads;
-    size_t              t_count;
-    std::atomic_size_t  x;
 
     struct deleter
     {
         mem_pool_t* pool;
 
-        deleter() = delete;
+        deleter()                   : pool(nullptr) { }
         deleter(mem_pool_t& p)      : pool(&p)      { }
         deleter(const deleter& p)   : pool(p.pool)  { }
 
         void operator()(void* buffer)
         {
             reinterpret_cast<i_marshaled_call*>(buffer)->~i_marshaled_call();
-            pool->release( buffer );
+            if(pool)
+            {
+                pool->release( buffer );
+            }
         }
     };
 
-    RC lock()
+    using qitem_t       = std::unique_ptr<i_marshaled_call,deleter>;
+    using work_thread_t = ee5::WorkThread<qitem_t>;
+    using tvec_t        = std::vector<work_thread_t>;
+
+    spin_shared_mutex<> active;
+
+    mem_pool_t          mem;
+    tvec_t              threads;
+    size_t              t_count;
+    std::atomic_size_t  x;
+
+
+    bool lock()
     {
-        return active.try_lock_shared() ? s_ok() : e_pool_terminated();
+        return active.try_lock_shared();
     }
 
     void unlock()
@@ -311,6 +409,7 @@ private:
         if(size > mem_pool::max_item_size)
         {
             *pp = nullptr;
+            return e_invalid_argument(1,"Pushing too much data.");
         }
 
 //         CBREx( size <= mem_pool::max_item_size, e_invalid_argument(2,"value must be non-null") );
@@ -325,7 +424,9 @@ private:
 
             if(!*pp)
             {
+                return e_out_of_memory();
 //                std::this_thread::yield();
+//                printf("%lu ",m.load());
                 m++;
             }
             else
@@ -501,39 +602,68 @@ struct ThreadpoolTest
 template<typename L,size_t iterations = 800000>
 void run_lock_test(TP& p)
 {
-    s_stopwatch_f   sw;
-    L               lock;
-    size_t          a = 0;
-    size_t          c = 0;
-    long double     d = 0;
-    size_t          f[100] = { };
+    m_stopwatch_d       sw;
+    L                   lock;
+    std::atomic_size_t  a;
+    std::atomic_size_t  c;
+    long double         d = 0;
+    size_t              f[100] = { };
 
     for(size_t x = 0;x < iterations;++x)
     {
-        p.Async( [&](size_t x)
+        RC dd = s_ok();
+        do
         {
-            static thread_local size_t g = a++;
-            long double ttf  = 0;
-
-            for(size_t q = 0;q < 100;q++)
+            dd = p.Async( [&]()
             {
-                ttf += ThreadpoolTest::Factorial(q*2);
-            }
+                long double ttf  = 0;
 
-            lock.lock();
+                for(size_t q = 0;q < 200;q++)
+                {
+                    ttf += ThreadpoolTest::Factorial(q*2);
+                }
 
-            ++c;
-            f[g]++;
-            d += ttf;
+                lock.lock();
 
-            lock.unlock();
+                static thread_local size_t tid = a++;
 
-        },x);
+                ++c;
+                f[tid]++;
+                d += ttf;
+
+                lock.unlock();
+
+                // for(size_t j = 0;j < 1;j++)
+                // {
+                //     RC qq = s_ok();
+
+                //      do
+                //      {
+                //         qq = p.Async( [&]()
+                //         {
+                //             long double ttg = ThreadpoolTest::Factorial(25);
+                //             lock.lock();
+                //             d += ttg;
+                //             lock.unlock();
+                //         });
+                //      }
+                //      while( qq != s_ok() );
+                // }
+
+            });
+        }
+        while( dd != s_ok() );
     }
 
-    while(p.Pending());
+    size_t xx;
+    do
+    {
+        xx = p.Pending();
+//        printf("%8lu %8lu\n",xx,c.load());
+    }
+    while(xx>0);
 
-    printf("Elapsed %-25.25s %12.6f s %lu / ",typeid(lock).name(), sw.delta(), c);
+    printf("Elapsed %-25.25s %16.8f m %9lu / ",typeid(lock).name(), sw.delta(), c.load());
     for(size_t b = 0;b < p.Count() ;b++)
     {
         printf("%2lu:%9lu ",b,f[b]);
@@ -544,7 +674,7 @@ void run_lock_test(TP& p)
 
 
 
-size_t threads = 8;
+static constexpr size_t threads = 8;
 
 TP p(threads);
 
@@ -560,12 +690,18 @@ RC FunctionTests()
     // LOG_ALWAYS("%s","testing...");
 
     ThreadpoolTest  target;
-    int             int_local       = 1350;
+    int             int_local       = 55555;
     double          double_local    = 55.555;
 
-    static constexpr size_t iterations = 80000000;
-    
+
+    // grow_test();
+
+    // return s_ok();
+
+    static constexpr size_t iterations = threads * 10000000;
+
     run_lock_test<std::mutex,iterations>           (p);
+    run_lock_test<spin_posix,iterations>           (p);
     run_lock_test<spin_mutex,iterations>           (p);
     run_lock_test<spin_barrier,iterations>         (p);
     run_lock_test<spin_shared_mutex<>,iterations>  (p);
@@ -698,23 +834,23 @@ RC FunctionTests()
 
     LOG_ALWAYS("Starting...","");
 
-    us_stopwatch_f t1a;
+    ms_stopwatch_f t1a;
     for(size_t g = 0;g < 2525252; g++)
     {
         CRR( p.Async( q, 3, g*.3, g ) );
     }
-    LOG_ALWAYS("Phase One Complete... %5.2lf ms",t1a.delta<std::milli>());
+    LOG_ALWAYS("Phase One Complete... %5.3lf ms",t1a.delta<std::milli>());
 
-    us_stopwatch_f t2a;
+    ms_stopwatch_f t2a;
     for(size_t g = 0;g < 5252524; g++)
     {
         CRR( p.Async( q, 4, g*.4, g ) );
     }
-    LOG_ALWAYS("Phase Two Complete... %5.2lf ms",t2a.delta<std::milli>());
+    LOG_ALWAYS("Phase Two Complete... %5.3lf ms",t2a.delta<std::milli>());
 
     //spin_mutex          lock;
-    //spin_barrier        lock  __attribute__ ((aligned (64)));
-    std::mutex          lock;
+    spin_barrier        lock  __attribute__ ((aligned (64)));
+    //std::mutex          lock;
 
     //std::array<int,64> bar;
 
@@ -810,13 +946,13 @@ RC FunctionTests()
 void App()
 {
     h_stopwatch_d sw;
-    
+
     p.Start();
-    
+
     FunctionTests();
 
     p.Shutdown();
-    
+
     // LOG_ALWAYS("%s","互いに同胞の精神をもって行動しなければならない。");
     // LOG_ALWAYS("%s","请以手足关系的精神相对待");
 
@@ -967,13 +1103,13 @@ void test_stopwatch()
 {
     ms_stopwatch_s  _a; // A Default millisecond stopwatch with size_t values
     m_stopwatch_f   _b;
-    
+
     float c = _a.delta<std::micro,float>();
 
     printf("A: %12lu ms\n",   _a.delta() );
     printf("B: %12.9f m\n",   _b.delta());
     printf("C: %12.3f us\n",  c);
-    
+
     printf("B: %12.0f us\n",_b.delta<std::micro>());
     printf("B: %12.3f ms\n",_b.delta<std::milli>());
     printf("B: %12.6f s\n", _b.delta<std::ratio<1>>());

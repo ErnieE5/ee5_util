@@ -56,6 +56,31 @@ public:
 
 };
 
+
+class spin_posix
+{
+    pthread_spinlock_t l;
+
+public:
+    spin_posix()
+    {
+        pthread_spin_init(&l,0);
+    }
+    ~spin_posix()
+    {
+        pthread_spin_destroy(&l);
+    }
+    void lock()
+    {
+        pthread_spin_lock(&l);
+    }
+    void unlock()
+    {
+        pthread_spin_unlock(&l);
+    }
+};
+
+
 class spin_mutex
 {
     static constexpr std::memory_order release = std::memory_order_release;
@@ -103,9 +128,11 @@ struct is_64_bit
 
 
     static constexpr value_type addend_exclusive    = 0x0000100000000000;
-    static constexpr value_type mask_exclusive      = 0x0FFFF00000000000;
-    static constexpr value_type addend_shared       = 0x0000000000000010;
-    static constexpr value_type mask_shared         = 0x000000FFFFFFFFF0;
+    static constexpr value_type mask_exclusive      = 0x1FFFF00000000000;
+    static constexpr value_type max_exclusive       = 0x0FFFF00000000000;
+    static constexpr value_type addend_shared       = 0x0000000000000001;
+    static constexpr value_type mask_shared         = 0x000001FFFFFFFFFF;
+    static constexpr value_type max_shared          = 0x000000FFFFFFFFFF;
 };
 
 struct is_32_bit
@@ -134,8 +161,10 @@ private:
 
     static constexpr storage_t addend_exclusive = storage_traits::addend_exclusive;
     static constexpr storage_t mask_exclusive   = storage_traits::mask_exclusive;
+    static constexpr storage_t max_exclusive    = storage_traits::max_exclusive;
     static constexpr storage_t addend_shared    = storage_traits::addend_shared;
     static constexpr storage_t mask_shared      = storage_traits::mask_shared;
+    static constexpr storage_t max_shared       = storage_traits::max_shared;
 
     barrier_t  barrier;
 
@@ -151,15 +180,15 @@ public:
         // Spin until we acquire the write lock. Which we know is "ours" because
         // no one else owned it before.
         //
-        storage_t ex;
-        while( ( ex = barrier.fetch_add(addend_exclusive,release) & mask_exclusive ) > 0 )
+        // storage_t ex;
+        while( ( /*ex =*/ barrier.fetch_add(addend_exclusive,acquire) & mask_exclusive ) > max_exclusive )
         {
-            barrier.fetch_sub(addend_exclusive);
+            barrier.fetch_sub(addend_exclusive,relaxed);
 
-            for(;ex&mask_exclusive;ex -= addend_exclusive)
-            {
-                std::this_thread::yield();
-            }
+            // for(;ex&mask_exclusive;ex -= addend_exclusive)
+            // {
+            //     std::this_thread::yield();
+            // }
         }
 
         // Spin while any readers are still owning a lock
@@ -169,7 +198,7 @@ public:
 
     void unlock()
     {
-        barrier.fetch_sub(addend_exclusive);
+        barrier.fetch_sub(addend_exclusive,release);
     }
 
     bool try_lock()
@@ -178,11 +207,11 @@ public:
         // are not doing anything, which means that the value in the barrier
         // had to be zero.
         //
-        bool owned = barrier.fetch_add(addend_exclusive) == 0;
+        bool owned = barrier.fetch_add(addend_exclusive,acquire) == 0;
 
         if( !owned )
         {
-            barrier.fetch_sub(addend_exclusive);
+            barrier.fetch_sub(addend_exclusive,relaxed);
         }
 
         return owned;
@@ -192,25 +221,27 @@ public:
     {
         // So "take" the lock,
         //
-        if( ++barrier & mask_exclusive )
+        storage_t value = ++barrier;
+
+        // but spin until a "max read" slot is available OR while a writer
+        // has the lock OR is waiting for readers to finish.
+        //
+        while( (value&mask_exclusive) || (value&mask_shared)>max_shared )
         {
-            // but spin until a "max read" slot is available OR while a writer
-            // has the lock OR is waiting for readers to finish.
-            //
-            while( barrier.load(acquire) & mask_exclusive );
+            value = barrier.load(acquire);
         }
     }
 
     void unlock_shared()
     {
-        barrier.fetch_sub(addend_shared);
+        barrier.fetch_sub(addend_shared,release);
     }
 
     bool try_lock_shared()
     {
-        barrier.fetch_add(addend_shared);
+        storage_t prev_value = barrier.fetch_add(addend_shared,acquire);
 
-        bool owned = ( ( barrier.load() & mask_shared ) <= mask_shared );
+        bool owned = ((prev_value & mask_exclusive) == 0 ) && ((prev_value & mask_shared) <= max_shared );
 
         if(!owned)
         {
@@ -230,10 +261,9 @@ public:
 //
 //
 template<typename L,typename F,typename...TArgs>
-void framed_lock(L& _mtx,F _f,TArgs...args)
+auto framed_lock(L& _mtx,F _f,TArgs...args) -> decltype(_f(args...))
 {
     std::lock_guard<L> __lock(_mtx);
-    //std::unique_lock<L> __lock(_mtx);
     return _f(args...);
 }
 
@@ -288,65 +318,113 @@ public:
 //---------------------------------------------------------------------------------------------------------------------
 //
 //
+// load is the max number of items to pull from the queue at a given time.
 //
-//
-template<typename QItem>
+template<typename QItem,size_t load = 100>
 class WorkThread
 {
 private:
-    using mutex = spin_mutex; //    std::mutex;
-    typedef object_method_delegate<WorkThread,void> thread_method;
-    typedef std::unique_lock<mutex>                 frame_lock;
-    typedef std::queue<QItem>                       work_queue;
-    typedef std::function<void(QItem&)>             work_method;
+    using mutex         = spin_mutex; // std::mutex;
+    using thread_method = object_method_delegate<WorkThread,void>;
+    using frame_lock    = std::lock_guard<mutex>;
+    using work_queue    = std::queue<QItem>;
+    using work_method   = std::function<void(QItem&)>;
+    using work_array    = std::array<QItem,load>;
 
-    ThreadEvent     sig;
-    size_t          user_id;
-    std::thread     thread;
-    work_method     method;
-    mutex           data_lock;
-    work_queue      queue;
-    bool            quit    = false;
-    bool            abandon = false;
-    std::atomic_size_t pending;
+    ThreadEvent         sig;
+    size_t              user_id;
+    std::atomic_size_t  pending;
+    std::thread         thread;
+    work_method         method;
 
-
-    void Process(work_queue& items)
-    {
-        while( items.size() > 0 )
-        {
-            method( items.front() );
-            items.pop();
-            --pending;
-        }
-    }
+    mutex               data_lock;
+    work_queue          queue;
+    bool                quit    = false;
+    bool                abandon = false;
 
     void Thread()
     {
-        while( !quit )
+        work_array  pending_work;
+        bool        running = true;
+
+        // The code inside this captured lambda needs to operate while
+        // under the data_lock. It is unclear if this code is more efficient
+        // or less efficient. Profiling the code didn't expose any major
+        // issues in an optimized build. The code can be written a number
+        // of ways and it is unclear (to me) at this point if this is
+        // faster / slower or less / more understandable.
+        //
+        // Originally this was an "in-line" lambda and could be moved
+        // back to that style.
+        //
+        auto populate_work_array = [&,this]()->size_t
         {
-            sig.Chill();
+            // The number of items we are going to take from the queue
+            // and place in the pending_work array.
+            //
+            size_t item_count = std::min( queue.size(), load );
 
-            work_queue work_to_do;
-
-            framed_lock( data_lock, [&]
+            // Move items from the queue of items into the pending
+            // items. Items that are in the pending_work array can
+            // not be abandoned.
+            //
+            for( size_t i = 0; i < item_count ; ++i, queue.pop() )
             {
-                while( queue.size() )
+                pending_work[i] = std::move( queue.front() );
+            }
+
+            running = !quit;
+            pending = item_count;
+
+            return item_count;
+        };
+
+        // The main thread item processing loop
+        //
+        while( running )
+        {
+            // The side effect of this framed_lock is that running, queue,
+            // and pending can all be modified. The frame lock keeps other
+            // threads from fiddling with the values.
+            //
+            size_t items = framed_lock( data_lock, populate_work_array );
+
+            if( items > 0 )
+            {
+                // Run each of the work items.
+                //
+                for( size_t i = 0 ; i < items ; ++i, --pending )
                 {
-                    work_to_do.push( std::move( queue.front() ) );
-                    queue.pop();
+                    // Transfer ownership of the transfer buffer to the
+                    // temporary so that the memory gets released at the
+                    // end of the frame.
+                    //
+                    QItem arg( std::move( pending_work[i] ) );
+
+                    // Do the work
+                    //
+                    method( arg );
                 }
-
-                pending += work_to_do.size();
-
-            } );
-
-            Process( work_to_do );
+            }
+            else if( running )
+            {
+                // Stall the thread until a signal wakes us up
+                //
+                sig.Chill();
+            }
         }
 
-        if( !abandon && queue.size() )
+        // When the user terminates the thread asking for a join,
+        // we don't abandon the work. This loop finishes any left
+        // over queued work before we exit.
+        //
+        if( !abandon )
         {
-            Process(queue);
+            while( queue.size() > 0 )
+            {
+                method( queue.front() );
+                queue.pop();
+            }
         }
     }
 
@@ -362,13 +440,10 @@ public:
     {
     }
 
-    int_fast64_t Startup()
+    RC Startup()
     {
         thread = std::thread( thread_method( this, &WorkThread::Thread ) );
-
-//        printf("hh %lu\n",user_id);
-
-        return 0;
+        return s_ok();
     }
 
     void Shutdown()
@@ -378,51 +453,46 @@ public:
 
     size_t Pending()
     {
-        frame_lock _lock(data_lock);
-        return queue.size() + pending;
+        return framed_lock( data_lock, [&]()->size_t { return queue.size() + pending; } );
     }
 
     void Quit(bool join = true)
     {
+        framed_lock( data_lock, [&,this]
         {
-            frame_lock _lock(data_lock);
-            quit = true;
-        }
+            quit    = true;
+            abandon = !join;
+        });
 
+        // Wake up the thread.
         sig.Set();
 
         if( join )
         {
             thread.join();
         }
-        else
-        {
-            abandon = true;
-        }
     }
 
-    void Enqueue( QItem&& p, std::function<void(QItem&)> f  = nullptr )
+    bool Enqueue( QItem&& p )
     {
-        bool signal = false;
+        bool enqueued = framed_lock( data_lock, [&]()->bool
         {
-            frame_lock _lock(data_lock);
-
-            signal = !quit;
-
-            if(signal)
+            if(!quit)
             {
-                if( f )
-                {
-                    f(p);
-                }
                 queue.push( std::move( p ) );
             }
-        }
 
-        if( signal )
+            return !quit;
+        });
+
+        // Wake up the thread if it was sleeping
+        //
+        if( enqueued )
         {
             sig.Set();
         }
+
+        return enqueued;
     }
 };
 

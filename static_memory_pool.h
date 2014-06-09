@@ -121,7 +121,7 @@ private:
     // to a generic member function through a std::bind or ee5::object_method_delegate
     // would remove the need for this declaration. However, both of those methods (or
     // even a lambda) would require twice the storage. (The pointer to the object instance
-    // and the pointer to the member/lambda.)
+    // and the pointer to the member / lambda.)
     //
     struct pool_deleter
     {
