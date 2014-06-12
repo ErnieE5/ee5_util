@@ -30,8 +30,39 @@
 namespace ee5
 {
 
+//-------------------------------------------------------------------------------------------------
+// spinning barriers
+//
+//  While doing parallel coding using a spin barrier ~can~ be more efficient over a relatively 
+//  long time. Much of any gain is largely dependent on the load factor. If your program is well
+//  split up and the scheduled operations are very short duration, the "win" can be as much as 7%.
+//  When I say ~can~ it is just that. The win is over the VERY long run and is an average. Lots of 
+//  things get in the way if you are running on a preemptively scheduled OS. The gain over a mutex
+//  is largely due to not incurring a call into the kernel to potentially park the thread. 
+//
+//  The benefit of a spin lock is considerably less when a "larger" amount of work per scheduled
+//  work item is done. Anytime a work thread is preempted and the OS grabs the quantum during a 
+//  spin, the spike in time obliterates any benefit.
+//
+//      for(size_t q = 0;q < 200;q++)
+//      {
+//          ttf += ThreadpoolTest::Factorial(q*2);
+//      }
+//
+//    rlt St5mutex                       39.47361948 m  80000000 /  0: 10000579  1: 10008047  2: 10003251  3:  9998440  4:  9994538  5:  9997243  6:  9996347  7: 10001555 
+//    rlt N3ee510spin_posixE             39.44335763 m  80000000 /  0:  9998613  1: 10000433  2:  9998422  3: 10008128  4:  9997107  5: 10000958  6:  9999421  7:  9996918 
+//    rlt N3ee510spin_mutexE             39.10398315 m  80000000 /  0: 10001318  1: 10001378  2:  9997679  3:  9996478  4: 10002363  5: 10001908  6:  9999910  7:  9998966 
+//    rlt N3ee512spin_barrierE           39.27151398 m  80000000 /  0:  9998555  1: 10007830  2:  9999378  3:  9996263  4:  9998000  5:  9999385  6: 10001734  7:  9998855 
+//    rlt N3ee517spin_shared_mutexI      39.29910535 m  80000000 /  0: 10002156  1:  9999819  2: 10001142  3:  9995567  4:  9999443  5: 10004356  6:  9999113  7:  9998404 
+//
+//
 
-//---------------------------------------------------------------------------------------------------------------------
+    
+
+
+    
+    
+//-------------------------------------------------------------------------------------------------
 //
 //
 //
