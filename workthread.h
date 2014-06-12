@@ -26,7 +26,16 @@
 #include <thread>
 #include <cassert>
 
-
+//
+// Note: 
+//
+//  On virtual hardware (pretty much every cloud system in existence today), a spin lock can 
+//  end up being MORE costly than a typical mutex (or CriticalSection). Choose wisely and 
+//  always TEST with time on target before making a choice.
+//
+//  The statement that a spin lock is ALWAYS faster than a mutex is simply NOT TRUE when ALL 
+//  dependent factors are accounted for.
+//
 namespace ee5
 {
 
@@ -150,6 +159,30 @@ public:
 };
 
 
+//-------------------------------------------------------------------------------------------------
+// 32/64 bit traits for the shared reader / writer style lock.
+//
+// Notes:
+//  
+//  This idea is kinda based on the SRWLock from MSFT, but adapted to use the C++
+//  support for threading. (aka a shared_mutex)
+//
+//  The idea of "max exclusive" writers is kindof "stupid" BUT if you have a system that
+//  might have a large number of writers wanting exclusive access, you need to trap all
+//  but the first one. Most of my designs typically have only a single writer, but in order
+//  to keep this generally more useful the base class uses a traits system to allow for
+//  the behavior to be modified. The default implementation allows for 65k (I told you, 
+//  absurd) writers to hit the spin at the same time. My current hardware can only encounter 
+//  a ~theoretical~ 8 way race and predictions are reasonable that we won't see 64bit 
+//  CPU's with 65k cores in my life time. (It WOULD be cool to see this!)
+//
+//  One of the uses this class is good for is tracking "pending work" and blocking "new"
+//  work. for those uses an "absurd" number of concurrent readers needs to be supported.
+//  In this case the default on a 64bit system is a little over 1 billion "concurrent" readers.
+//
+//  Depending on usage, I have seen dozens of readers hold a lock for "a while." In (good)
+//  concurrent design, you really should hold ANY lock for VERY short amounts of time.
+//
 struct is_64_bit
 {
     static const bool value = sizeof(void*) == sizeof(uint64_t);
@@ -179,6 +212,10 @@ struct is_32_bit
 };
 
 
+//
+// A writer waiting will stall NEW readers and any secondary++ writers waiting will stall until
+// after all NEW readers blocked by the current writer finish.
+//
 template<typename storage_traits = typename std::conditional<is_64_bit::value,is_64_bit,is_32_bit>::type >
 class spin_shared_mutex
 {
@@ -205,21 +242,14 @@ public:
         barrier = 0;
     }
 
-    // Notes on the write lock. Th
     void lock()
     {
         // Spin until we acquire the write lock. Which we know is "ours" because
         // no one else owned it before.
         //
-        // storage_t ex;
-        while( ( /*ex =*/ barrier.fetch_add(addend_exclusive,acquire) & mask_exclusive ) > max_exclusive )
+        while( ( barrier.fetch_add(addend_exclusive,acquire) & mask_exclusive ) > max_exclusive )
         {
             barrier.fetch_sub(addend_exclusive,relaxed);
-
-            // for(;ex&mask_exclusive;ex -= addend_exclusive)
-            // {
-            //     std::this_thread::yield();
-            // }
         }
 
         // Spin while any readers are still owning a lock
