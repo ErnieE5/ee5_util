@@ -328,7 +328,7 @@ public:
 
         void* pmem = mmap(0,g*100,PROT_READ|PROT_WRITE, MAP_ANON|MAP_SHARED,-1,0);
 
-        printf("%16lx\n",pmem);
+        printf("%16p\n",pmem);
     }
 
 
@@ -597,17 +597,22 @@ struct ThreadpoolTest
 };
 
 
-
+#include <numeric>
 
 template<typename L,size_t iterations = 800000>
 void run_lock_test(TP& p)
 {
-    m_stopwatch_d       sw;
+    printf("rlt %-25.25s ",typeid(L).name()); fflush(stdout);
+
+    m_stopwatch_f       sw;
     L                   lock;
+    std::vector<size_t> times;
     std::atomic_size_t  a;
     std::atomic_size_t  c;
     long double         d = 0;
     size_t              f[100] = { };
+
+    times.reserve(iterations);
 
     for(size_t x = 0;x < iterations;++x)
     {
@@ -623,11 +628,13 @@ void run_lock_test(TP& p)
                     ttf += ThreadpoolTest::Factorial(q*2);
                 }
 
+                us_stopwatch_s swt;
                 lock.lock();
+                times.push_back(swt.delta());
 
                 static thread_local size_t tid = a++;
 
-                ++c;
+                size_t iter = c++;
                 f[tid]++;
                 d += ttf;
 
@@ -649,7 +656,6 @@ void run_lock_test(TP& p)
                 //      }
                 //      while( qq != s_ok() );
                 // }
-
             });
         }
         while( dd != s_ok() );
@@ -663,12 +669,17 @@ void run_lock_test(TP& p)
     }
     while(xx>0);
 
-    printf("Elapsed %-25.25s %16.8f m %9lu / ",typeid(lock).name(), sw.delta(), c.load());
+    size_t sum = std::accumulate(times.begin(),times.end(),0);
+    auto mm = std::minmax_element(times.begin(),times.end());
+    printf("-%lu-",sum);
+
+    printf("%16.8f m %9lu / ", sw.delta(), c.load());
+    //printf("%20lu us %9lu / ", sw.delta(), c.load());
     for(size_t b = 0;b < p.Count() ;b++)
     {
         printf("%2lu:%9lu ",b,f[b]);
     }
-    printf("\n"); fflush(stdout);
+    printf("%lu us (%lu,%lu)\n",sum/iterations,*mm.first,*mm.second); fflush(stdout);
 }
 
 
@@ -698,7 +709,7 @@ RC FunctionTests()
 
     // return s_ok();
 
-    static constexpr size_t iterations = threads * 10000000;
+    static constexpr size_t iterations = threads * 10000;//000;
 
     run_lock_test<std::mutex,iterations>           (p);
     run_lock_test<spin_posix,iterations>           (p);

@@ -7,7 +7,7 @@ During my career I have worked on many systems that share the fundamental basis 
 
 The basic idea is an attempt to unify all the "goodness" of the systems I have worked on in the past, into something that I can publicly display (warts included at this point). I have borrowed ideas from many projects and worked them into this design. If I have the time and resources I'd like to make this more general purpose, but I doubt that is ultimately likely. The programming model isn't far from what a developer used to using a "managed" platform might expect and has a few "functional" ideas tossed in.
 
-**This is a work in progress at the moment.** It works (in principle) but needs (a lot of) further development to make it fully functional. (Many of the files aren't properly staged and code is still being placed where expedient.) A more mature project would have most of this under control, but the foundational items are being put together. 
+**This is a work in progress.** It works (in principle) but needs (a lot of) further development to make it fully functional. (Many of the files aren't properly staged and code is still being placed where expedient.) A more mature project would have most of this under control, but the foundational items are being put together.
 
 Environment
 -----------
@@ -26,5 +26,5 @@ Thread model: posix
 
 ```Textile
 vm /home/erniee/ee5_util -> uname -a
-Linux debian-vm 3.2.0-4-amd64 #1 SMP Debian 3.2.57-3+deb7u1 x86_64 GNU/Linux
+Linux debian-vm 3.2.0-4-amd64 #1 SMP Debian 3.2.57-3+deb7u2 x86_64 GNU/Linux
 ```
