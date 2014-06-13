@@ -1,7 +1,7 @@
 #--------------------------------------------------------------------------------------------------
 # Copyright (C) 2014 Ernest R. Ewert
-# 
-# Feel free to use this as you see fit. 
+#
+# Feel free to use this as you see fit.
 # I ask that you keep my name with the code.
 #
 # THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
@@ -268,7 +268,7 @@ $(O_INTER)/%.bc: %.cpp
 # -----------------------------------------------
 #
 $(O_TARG): $(BC_FILES)
-	$(call RUN_COMMAND,$(CXX) $(SYMBOLS) $(BC_FILES) -o $(O_TARG) $(L_SEARCH) $(L_LIBRARIES))
+	$(call RUN_COMMAND,$(CXX) $(SYMBOLS) $(BC_FILES) $(C_F) -o $(O_TARG) $(L_SEARCH) $(L_LIBRARIES))
 
 #=======================================================================================================================
 #

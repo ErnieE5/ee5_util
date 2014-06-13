@@ -19,10 +19,12 @@ WARNINGS:=\
 
 SYMBOLS=-g
 
-FARGUMENTS:= \
 #	no-rtti \
-#	sanitize=thread \
-	no-exceptions
+
+
+FARGUMENTS:= \
+	error-limit=1\
+
 
 LIBRARY_PATHS:=\
 	/usr/lib/gcc/x86_64-linux-gnu/4.7/ \

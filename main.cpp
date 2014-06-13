@@ -621,7 +621,7 @@ void run_lock_test(TP& p)
             {
                 long double ttf  = 0;
 
-                for(size_t q = 0;q < 200;q++)
+                for(size_t q = 0;q < 100;q++)
                 {
                     ttf += ThreadpoolTest::Factorial(q*2);
                 }
@@ -669,9 +669,9 @@ void run_lock_test(TP& p)
 
     size_t sum = std::accumulate(times.begin(),times.end(),0);
     auto mm = std::minmax_element(times.begin(),times.end());
-    printf("-%lu-",sum);
+    printf("-%10lu-",sum);
 
-    printf("%16.8f m %9lu / ", sw.delta(), c.load());
+    printf("%12.8f m %9lu / ", sw.delta(), c.load());
     //printf("%20lu us %9lu / ", sw.delta(), c.load());
     for(size_t b = 0;b < p.Count() ;b++)
     {
@@ -703,11 +703,13 @@ RC FunctionTests()
     double          double_local    = 55.555;
 
 
+//using spin_shared_mutex_t = spin_reader_writer_lock<is_32_bit>;
+
     // grow_test();
 
     // return s_ok();
 
-    static constexpr size_t iterations = threads * 10000;//000;
+    static constexpr size_t iterations = threads * 100000000;
 
     run_lock_test<std::mutex,iterations>           (p);
     run_lock_test<spin_posix,iterations>           (p);
