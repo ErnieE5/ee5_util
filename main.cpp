@@ -386,7 +386,7 @@ private:
     using work_thread_t = ee5::WorkThread<qitem_t>;
     using tvec_t        = std::vector<work_thread_t>;
 
-    spin_shared_mutex<> active;
+    spin_shared_mutex_t active;
 
     mem_pool_t          mem;
     tvec_t              threads;
@@ -713,7 +713,7 @@ RC FunctionTests()
     run_lock_test<spin_posix,iterations>           (p);
     run_lock_test<spin_mutex,iterations>           (p);
     run_lock_test<spin_barrier,iterations>         (p);
-    run_lock_test<spin_shared_mutex<>,iterations>  (p);
+    run_lock_test<spin_shared_mutex_t,iterations>  (p);
 
     return s_ok();
 
