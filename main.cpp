@@ -425,8 +425,6 @@ private:
             if(!*pp)
             {
                 return e_out_of_memory();
-//                std::this_thread::yield();
-//                printf("%lu ",m.load());
                 m++;
             }
             else
