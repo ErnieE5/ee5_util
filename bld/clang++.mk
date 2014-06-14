@@ -77,7 +77,7 @@ O_TYPE          ?= Unknown
 O_ARCH          ?= x86_64
 OPTIMIZE        ?= 0
 WARNINGS        ?= all
-BUILDS          ?= Debug Release
+BUILDS          ?= debug release
 AR              ?= llvm-ar
 RANLIB          ?= llvm-ranlib
 
