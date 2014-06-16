@@ -1,7 +1,7 @@
 //-------------------------------------------------------------------------------------------------
 // Copyright (C) 2014 Ernest R. Ewert
-// 
-// Feel free to use this as you see fit. 
+//
+// Feel free to use this as you see fit.
 // I ask that you keep my name with the code.
 //
 // THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
@@ -11,20 +11,29 @@
 // OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 // ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
 // OTHER DEALINGS IN THE SOFTWARE.
-//
+// 
 
-#ifndef EE5_SYSTEM_H_
-#define EE5_SYSTEM_H_
+#ifndef I_MARSHALED_CALL_H_
+#define I_MARSHALED_CALL_H_
 
-#include "error.h"
-
-#include <cstddef>
 
 namespace ee5
 {
 
-int     Startup(size_t c,const char* s);
-void    Shutdown();
+//-------------------------------------------------------------------------------------------------
+// This is an "interface" class. That allows pretty much anything that implements the Execute
+// method be queued and generically executed.  The primary use is by the various instantiations
+// of the marshaled_call template below.
+//
+
+struct i_marshaled_call
+{
+    virtual void Execute() = 0;
+    virtual ~i_marshaled_call() { }
+};
+
+
 
 }       // namespace ee5
-#endif  // EE5_SYSTEM_H_
+#endif  // I_MARSHALED_CALL_H_
+

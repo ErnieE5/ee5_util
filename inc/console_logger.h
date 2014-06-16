@@ -16,10 +16,10 @@
 #ifndef LOGGING_H_
 #define LOGGING_H_
 
-#include "error.h"
-#include "logging.h"
-#include "workthread.h"
-#include "static_memory_pool.h"
+#include <error.h>
+#include <logging.h>
+#include <workthread.h>
+#include <static_memory_pool.h>
 
 #include <atomic>
 #include <cstdint>

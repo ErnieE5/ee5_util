@@ -16,9 +16,11 @@
 #ifndef I_MARSHALL_WORK_H_
 #define I_MARSHALL_WORK_H_
 
+#include <error.h>
+#include <i_marshaled_call.h>
+
 namespace ee5
 {
-
 //---------------------------------------------------------------------------------------------------------------------
 // i_marshal_work
 //
