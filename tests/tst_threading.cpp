@@ -29,6 +29,7 @@
 #include <vector>
 #include <string>
 #include <mutex>
+#include <shared_mutex>
 
 using namespace ee5;
 
@@ -42,16 +43,16 @@ using namespace ee5;
 class TP : public i_marshal_work
 {
 private:
-    using mem_pool_t    = static_memory_pool<128,10000>;
-    
+    using mem_pool_t    = static_memory_pool<128,1000000>;
+
     struct deleter
     {
         mem_pool_t* pool;
-        
+
         deleter()                   : pool(nullptr) { }
         deleter(mem_pool_t& p)      : pool(&p)      { }
         deleter(const deleter& p)   : pool(p.pool)  { }
-        
+
         void operator()(void* buffer)
         {
             reinterpret_cast<i_marshaled_call*>(buffer)->~i_marshaled_call();
@@ -61,29 +62,30 @@ private:
             }
         }
     };
-    
+
     using qitem_t       = std::unique_ptr<i_marshaled_call,deleter>;
     using work_thread_t = ee5::WorkThread<qitem_t>;
     using tvec_t        = std::vector<work_thread_t>;
-    
-    spin_shared_mutex_t active;
-    
+
+//    spin_shared_mutex_t active;
+    std::shared_mutex   active;
+
     mem_pool_t          mem;
     tvec_t              threads;
     size_t              t_count;
     std::atomic_size_t  x;
-    
-    
+
+
     bool lock()
     {
         return active.try_lock_shared();
     }
-    
+
     void unlock()
     {
         active.unlock_shared();
     }
-    
+
     RC get_storage(size_t size,void** pp)
     {
         if(size > mem_pool_t::max_item_size)
@@ -91,7 +93,7 @@ private:
             *pp = nullptr;
             return e_invalid_argument(1,"Pushing too much data.");
         }
-        
+
         //         CBREx( size <= mem_pool::max_item_size, e_invalid_argument(2,"value must be non-null") );
         //         CBREx( pp != nullptr,                   e_invalid_argument(2,"value must be non-null") );
         *pp = nullptr;
@@ -99,9 +101,9 @@ private:
         {
             static std::atomic<size_t> c;
             static std::atomic<size_t> m;
-            
+
             *pp = mem.acquire();
-            
+
             if(!*pp)
             {
                 return e_out_of_memory();
@@ -113,10 +115,10 @@ private:
             }
         }
         while(!*pp);
-        
+
         return s_ok();
     }
-    
+
     RC enqueue_work(i_marshaled_call* p)
     {
         threads[std::rand()%t_count].Enqueue( qitem_t( p, deleter(mem) ) );
@@ -126,29 +128,29 @@ private:
         ++x;
         return s_ok();
     }
-    
+
 public:
     TP(size_t t = std::thread::hardware_concurrency())
     {
         std::srand(std::time(0));
         active.lock();
-        
+
         t_count = t;
-        
+
         // Create the threads first...
         //
         for(size_t c = t_count; c ; --c)
         {
             threads.push_back( work_thread_t( c, [](qitem_t& p) { p->Execute(); } ) );
         }
-        
+
         // Start them.
         for(auto& s : threads)
         {
             s.Startup();
         }
     }
-    
+
     size_t Pending()
     {
         size_t s = 0;
@@ -158,28 +160,28 @@ public:
         }
         return s;
     }
-    
+
     void Shutdown(bool abandon = false)
     {
         active.lock();
-        
+
         for(auto& k : threads)
         {
             k.Quit();
         }
     }
-    
+
     void Start()
     {
         active.unlock();
     }
-    
+
     size_t Count()
     {
         return t_count;
     }
-    
-    
+
+
 };
 
 
@@ -210,11 +212,11 @@ struct ThreadpoolTest
     ~ThreadpoolTest()
     {
     }
-    
+
     void NineArgs(int a, int b, int c, int d, int e, int f, int g, int h, int i)
     {
         LOG_ALWAYS("a:%i b:%i c:%i d:%i e:%i f:%i g:%i h:%i i:%i",a,b,c,d,e,f,g,h,i);
-        
+
         assert(a == 1);
         assert(b == 2);
         assert(c == 3);
@@ -225,49 +227,49 @@ struct ThreadpoolTest
         assert(h == 8);
         assert(i == 9);
     }
-    
+
     void ScalarTypes(int a, double b,size_t c)
     {
         LOG_ALWAYS("a: %i b:%g c:%zu",a ,b ,c );
     }
-    
+
     template<typename C>
     void TemplateRef(C& items)
     {
         LOG_ALWAYS("(%zu)--", items.size() );
     }
-    
+
     void ScalarAndReference(int a, double b, std::list<int>& l)
     {
         LOG_ALWAYS("(%zu) a:%i b:%g --", l.size(), a, b );
     }
-    
+
     void String(std::string& s)
     {
         LOG_ALWAYS("s:%s", s.c_str() );
     }
-    
+
     template<typename T>
     void Template(T t)
     {
         LOG_ALWAYS("value: TODO", "");
     }
-    
-    
+
+
     static long double Factorial(unsigned long n,long double a = 1)
     {
         if( n == 0 ) return a;
         return Factorial(n-1, a * n );
     }
-    
+
     spin_mutex  lock;
     long double total = 0;
-    
+
     void CalcFactorial(unsigned long n)
     {
         us_stopwatch_d taft;
         long double f = Factorial(n);
-        
+
         for(unsigned long h = n;h > 2;h--)
         {
             tp.Async( [&](unsigned long h)
@@ -276,11 +278,11 @@ struct ThreadpoolTest
                 framed_lock( lock, [&] { total+=v; } );
             }, h );
         }
-        
-        
+
+
         LOG_ALWAYS("n: %2lu value: %26.0Lf %8lu us",n, Factorial(n),taft.delta<std::micro>() );
     }
-    
+
 };
 
 
@@ -546,15 +548,15 @@ size_t  tp_count()      { return tp.Count();    }
 void tst_threading()
 {
     h_stopwatch_d sw;
-    
+
     tp.Start();
-    
+
     FunctionTests();
-    
+
     tp.Shutdown();
-    
+
     // LOG_ALWAYS("%s","互いに同胞の精神をもって行動しなければならない。");
     // LOG_ALWAYS("%s","请以手足关系的精神相对待");
-    
+
     LOG_ALWAYS("Elapsed time %.6f h",sw.delta());
 }

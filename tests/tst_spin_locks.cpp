@@ -33,6 +33,14 @@ void    tp_stop();
 size_t  tp_pending();
 size_t  tp_count();
 
+
+static long double Factorial(unsigned long n,long double a = 1)
+{
+    if( n == 0 ) return a;
+    return Factorial(n-1, a * n );
+}
+
+
 template<typename L,size_t iterations = 800000>
 void run_lock_test(i_marshal_work* p)
 {
@@ -57,10 +65,10 @@ void run_lock_test(i_marshal_work* p)
             {
                 long double ttf  = 0;
 
-                // for(size_t q = 0;q < 100;q++)
-                // {
-                //     ttf += ThreadpoolTest::Factorial(q*2);
-                // }
+                for(size_t q = 0;q < 100;q++)
+                {
+                    ttf += Factorial(q*2);
+                }
 
                 us_stopwatch_s swt;
                 lock.lock();
@@ -68,7 +76,7 @@ void run_lock_test(i_marshal_work* p)
 
                 static thread_local size_t tid = a++;
 
-                //size_t iter = 
+                //size_t iter =
                 c++;
                 f[tid]++;
                 d += ttf;
@@ -92,6 +100,7 @@ void run_lock_test(i_marshal_work* p)
                 //      while( qq != s_ok() );
                 // }
             });
+            printf("\r %12lu 0x%016lx",x,dd);
         }
         while( dd != s_ok() );
     }
@@ -121,15 +130,15 @@ void run_lock_test(i_marshal_work* p)
 
 void tst_spin_locks()
 {
-    static constexpr size_t iterations = 8 * 10000;//0000;
+    static constexpr size_t iterations = 8 * 10;//000;//0000;
 
     tp_start();
-    
+
     run_lock_test<std::mutex,iterations>           (pool);
     run_lock_test<spin_posix,iterations>           (pool);
     run_lock_test<spin_mutex,iterations>           (pool);
     run_lock_test<spin_barrier,iterations>         (pool);
     run_lock_test<spin_shared_mutex_t,iterations>  (pool);
-    
+
     tp_stop();
 }

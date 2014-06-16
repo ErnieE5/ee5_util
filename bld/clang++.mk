@@ -71,7 +71,7 @@ include $(dir $(lastword $(MAKEFILE_LIST)))utilities.mk
 #==================================================================================================
 #
 # Default settings based on optional override variables.
-#   
+#
 ARCHITECTURES   ?= x86_64
 O_TYPE          ?= Unknown
 O_ARCH          ?= x86_64
@@ -311,13 +311,13 @@ $(O_INTER)/%.bc: %.cpp
 $(O_INTER)/%.o: $(O_INTER)/%.bc
 	$(call RUN_COMMAND,$(CXX) -c -o $@ $<,$@,$<)
 
-# Create .d files for tracking header dependencies 
+# Create .d files for tracking header dependencies
 # --------------------------------------------------
 $(O_INTER)/%.d: %.cpp | $(O_INTER)
 	@$(if $(findstring Unknown,$(O_INTER)),,\
 		$(call LOG_COMMAND,\
 			$(CXX) $(C_STD) -MM $(C_I) $< | sed 's~\(.*\)\.o[ :]*~${O_INTER}/\1.bc $@: ~g' > $@))
-     
+
 
 #
 # Directory existence
@@ -343,8 +343,9 @@ $(SO_TARG): $(SL_FILES) | $(LIB_STAGING)$(O_AT)
 	$(call MAKE_TARGET,$(AR) rcs $(SO_TARG) $(SL_FILES) )
 endif
 ifneq ($(DO_TARG),)
+comma:= ,
 $(DO_TARG): $(BC_FILES) | $(BIN_STAGING)$(O_AT)
-	$(call MAKE_TARGET,$(CXX) -shared $(L_FLAGS) $^ -o $@ )
+	$(call MAKE_TARGET,$(CXX) -shared $(L_FLAGS) -Wl$(comma)-soname\$(comma)$(abspath $(DO_TARG)) $^ -o $@ )
 	$(shell ln -s $(abspath $(DO_TARG)) $(DO_LINK))
 endif
 else
