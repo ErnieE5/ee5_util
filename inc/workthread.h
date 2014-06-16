@@ -16,7 +16,7 @@
 #ifndef EE5_WORKTHREAD_H_
 #define EE5_WORKTHREAD_H_
 
-#include "delegate.h"
+#include <delegate.h>
 
 #include <condition_variable>
 #include <memory>

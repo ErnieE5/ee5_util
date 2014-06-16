@@ -1,16 +1,29 @@
+//-------------------------------------------------------------------------------------------------
+// Copyright (C) 2014 Ernest R. Ewert
+//
+// Feel free to use this as you see fit.
+// I ask that you keep my name with the code.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+// EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+// MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
+// IN NO EVENT SHALL THE AUTHORS BE LIABLE FOR ANY CLAIM, DAMAGES OR
+// OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
+// ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
+// OTHER DEALINGS IN THE SOFTWARE.
+//
 
 #ifndef ERROR_HANDLING_H_
 #define ERROR_HANDLING_H_
 
-#include <cstdint>
+#include <cstddef>
+#include <stdint.h>
 
 namespace ee5
 {
 
-
-
-typedef std::int_fast64_t   result_code_t;
-typedef result_code_t       rc_t;
+typedef int_fast64_t 	result_code_t;
+typedef result_code_t   rc_t;
 
 #define s_ok()                  static_cast<result_code_t>(0)
 #define e_out_of_memory()       static_cast<result_code_t>(0x8000000000000001)

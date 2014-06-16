@@ -18,9 +18,11 @@
 #ifndef EE5_DELEGATE_H_
 #define EE5_DELEGATE_H_
 
+#include <cstddef>
 #include <tuple>
 #include <functional>
 
+#include <i_marshaled_call.h>
 
 namespace ee5
 {
@@ -188,21 +190,6 @@ public:
 };
 
 
-
-
-
-
-//-------------------------------------------------------------------------------------------------
-// This is an "interface" class. That allows pretty much anything that implements the Execute
-// method be queued and generically executed.  The primary use is by the various instantiations
-// of the marshaled_call template below.
-//
-
-struct i_marshaled_call
-{
-    virtual void Execute() = 0;
-    virtual ~i_marshaled_call() { }
-};
 
 
 

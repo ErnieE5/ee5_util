@@ -1,34 +1,29 @@
 
 
-INCLUDE_PATHS:=\
+COMPILER=clang++
+
+TESTS:=\
+	command_line\
+    atomic_stack\
+    delegate\
+    spin_locks\
 
 SOURCES:=\
-    main.cpp 				\
-    console_logger.cpp		\
-    threadpool.cpp			\
-    workthread.cpp			\
-    system.cpp				\
+    main.cpp\
+    $(TESTS:%=tst_%.cpp)
 
-TARGET:=t_test
+TARGET:=ee5util_ft
 
-ARCHITECTURES:=x86_64
+SYMBOLS=1
 
-DEFINES:=\
+default:
+	$(call SUB_MAKE,all)
 
-WARNINGS:=\
-
-SYMBOLS=-g
-
-FARGUMENTS:= \
-#	no-rtti \
-#	sanitize=thread \
-	no-exceptions
-
-LIBRARY_PATHS:=\
-	/usr/lib/gcc/x86_64-linux-gnu/4.7/ \
-
-LIBRARIES:=\
-	stdc++ \
-	pthread \
-
-include clang.mk
+target_sup=\
+$(if $(wildcard $(2)Makefile.root),\
+ $(eval include  $(2)Makefile.root) \
+ $(eval include  $(BUILD_TOOLS)$(strip $(1))),\
+ $(if $(subst /,,$(realpath ../$(2))),\
+  $(call $(0),$(1),../$(2)),\
+  $(error Makefile.root not found.)))
+$(call target_sup, $(COMPILER).mk )

@@ -14,12 +14,12 @@
 #
 #
 #	This is a "master" control make file. The following variables can be found
-#	in the "root" makefile file and some are required.
+#	in the "root" makefile file and some (*) are required.
 #
-#	SOURCES
+#	SOURCES*
 #		A space separated list of source files.  At this time .cpp is expected.
 #
-#	TARGET
+#	TARGET*
 #		The target of the output.  ~Currently~ this target is only an "executable"
 #		and not a shared or static library.
 #
@@ -30,10 +30,10 @@
 #		A space separated list of include directories that are added as -I values
 #		for inclusion.
 #
-#	LIBRARY_PATHS
+#	LIB_PATHS
 #		A list of paths that are added as -L options.
 #
-#	LIBRARIES
+#	LIBS
 #		A list of libs that are added as -l options.
 #
 #	WARNINGS
@@ -58,52 +58,50 @@
 .PHONY: usage
 usage:
 	@printf "\n"
-	@printf "$(cER)A build target is required when building with clang.mk...\n\n"
+	@printf "$(cER)A build target is required when building with clang++.mk...\n\n"
 	@printf "$(cIM)Try:\n"
 	@printf "$(cTS)\tmake Debug   | debug   | dbg | d\n"
 	@printf "$(cTS)\tmake Release | release | rel | r\n"
 	@printf "$(cTS)\tmake Clean   | clean   | cln | c\n"
 	@printf "\n"
 
-include utilities.mk
+include $(dir $(lastword $(MAKEFILE_LIST)))utilities.mk
 
 
-#=======================================================================================================================
+#==================================================================================================
 #
 # Default settings based on optional override variables.
-#
+#   
 ARCHITECTURES   ?= x86_64
 O_TYPE          ?= Unknown
 O_ARCH          ?= x86_64
 OPTIMIZE        ?= 0
 WARNINGS        ?= all
 BUILDS          ?= debug release
-AR              ?= llvm-ar
+AR              := llvm-ar-3.5
 RANLIB          ?= llvm-ranlib
+CXX 			?= clang++
+LIBS 			?= stdc++
 
-O_INTER:=$(O_ARCH)/$(O_TYPE)
+O_AT:=$(O_ARCH)_$(O_TYPE)
+O_OBJ:=obj
+O_INTER:=$(O_OBJ)/$(O_AT)
 
-#=======================================================================================================================
+#==================================================================================================
 # Diagnostics or setup for missing required values.
 #
 # TODO: Need to fix multi ARCH
 #
 ifeq ($(strip $(ARCHITECTURES)),)
-	$(error You must specify a single ARCH ~for now~.)
+$(error You must specify a single ARCH ~for now~.)
 endif
 
-
-ifneq ($(strip $(TARGET)),)
-	O_TARG:=$(O_INTER)/$(TARGET)
-else
-	$(error You must specify a TARGET value.)
-endif
 
 ifeq ($(strip $(SOURCES)),)
 	$(error You must specify a set of SOURCES.)
 endif
 
-#=======================================================================================================================
+#==================================================================================================
 #
 # "Standard" include locations...
 #
@@ -111,25 +109,25 @@ INCLUDE_PATHS+=\
     /usr/include \
     /usr/local/include
 
-#=======================================================================================================================
+#==================================================================================================
 #
 # TODO: Make the build version real
 #
 DEFINES+=\
 	BUILD_VERSION=$(shell date -u +"%F_%T")
 
-ifeq ($(O_TYPE),Release)
+ifeq ($(O_TYPE),release)
 DEFINES+= \
 	NDEBUG=1
 endif
 
 
 
-#=======================================================================================================================
+#==================================================================================================
 #
 # Expansion for any -f arguments.
 #
-FARGUMENTS+= message-length=0
+FARGUMENTS ?= message-length=0
 
 # We need to "force" the "pretty" colors if selected because of the
 # redirections of stdout to logs.
@@ -138,7 +136,7 @@ ifneq ($(strip $(color)),)
 FARGUMENTS+= color-diagnostics
 endif
 
-#=======================================================================================================================
+#==================================================================================================
 #
 # Compiler arguments
 #
@@ -149,6 +147,24 @@ C_F := $(FARGUMENTS:%=-f%)
 
 BC_FILES:=$(SOURCES:%.cpp=${O_INTER}/%.bc)
 
+
+TGT_BASE:=$(strip $(TARGET))
+ifneq ($(TGT_BASE),)
+ ifdef LIBRARY_MAKE
+  ifeq ($(findstring static,$(LIBRARY_MAKE)),static)
+   SL_FILES:=$(BC_FILES:%.bc=%.o)
+   SO_TARG:=$(LIB_STAGING)$(O_AT)/$(TGT_BASE).a
+  endif
+  ifeq ($(findstring dynamic,$(LIBRARY_MAKE)),dynamic)
+   DO_TARG:=$(BIN_STAGING)$(O_AT)/$(TGT_BASE).so.$(LIBRARY_VER)
+  endif
+ else
+  EO_TARG:=$(BIN_STAGING)$(O_AT)/$(TGT_BASE)
+ endif
+else
+$(error You must specify a TARGET value.)
+endif
+
 #
 # This file is setup to default to emitting byte code.
 #
@@ -158,21 +174,43 @@ C_FLAGS:=-emit-llvm -c
 # Default to C++ 11 unless explicitly disabled.
 #
 ifeq ($(strip $(CPP_11_OFF)),)
-C_STD:= -std=c++11
+C_STD+= -std=c++11
 endif
 
-C_FLAGS+= -O$(OPTIMIZE) $(SYMBOLS)
+#
+# Default to Link Time Optimization unless explicitly disabled.
+#
+ifeq ($(strip $(NO_LTO)),)
+L_FLAGS+= -flto
+endif
 
-CXX:=clang++ $(C_STD)
+ifeq ($(strip $(SYMBOLS)),1)
+C_FLAGS+= -g
+L_FLAGS+= -g
+endif
 
-#=======================================================================================================================
+#
+# Default to Link Time Optimization unless explicitly disabled.
+#
+# ifeq ($(strip $(NO_LTO)),)
+# C_STD+= -flto
+# endif
+
+
+
+
+C_FLAGS+= -O$(OPTIMIZE)
+
+CXX:=clang++
+
+#==================================================================================================
 #
 # Linker arguments
 #
-L_SEARCH:=$(LIBRARY_PATHS:%=-L%)
-L_LIBRARIES:=$(LIBRARIES:%=-l%)
+L_SEARCH:=$(LIB_PATHS:%=-L%)
+L_LIBS:=$(LIBS:%=-l%)
 
-#=======================================================================================================================
+#==================================================================================================
 #
 # Create list of "sub make" includes for tracking dependency checking of headers.
 #
@@ -180,7 +218,7 @@ D_FILES:=$(SOURCES:%.cpp=${O_INTER}/%.d)
 
 
 
-#=======================================================================================================================
+#==================================================================================================
 # Target helpers
 #
 #	This section contains helpers that control the build.
@@ -191,13 +229,13 @@ D_FILES:=$(SOURCES:%.cpp=${O_INTER}/%.d)
 # rules.
 #
 define GEN_PREREQUISITES
-	$(call LOG_COMMAND,$(CXX) -MM $(C_I) $< | sed 's~\(.*\)\.o[ :]*~${O_INTER}/\1.bc $@: ~g' > $@)
+	$(info $@ $<)
+#	$(call LOG_COMMAND,$(CXX) $(C_STD) -MM $(C_I) $(addsuffix .cpp,$(basename $(@F))) | sed 's~\(.*\)\.o[ :]*~${O_INTER}/\1.bc $@: ~g' > $@)
 endef
 
 
 
-
-#=======================================================================================================================
+#==================================================================================================
 #
 # Targets
 #
@@ -208,6 +246,7 @@ endef
 #
 .PHONY: All all a
 All all a:
+	$(call RM,$(BL)) ${NL}
 	$(foreach b,$(BUILDS),$(call SUB_MAKE,$(b))${NL})
 	@echo # Intentional White Space
 #
@@ -215,7 +254,7 @@ All all a:
 # -------------------------------
 #
 .PHONY: doit
-doit: $(O_TARG)
+doit: $(EO_TARG) $(SO_TARG) $(DO_TARG)
 
 #
 # Build debug target using a sub-build
@@ -225,7 +264,8 @@ doit: $(O_TARG)
 Debug debug dbg d:
 	@echo # Intentional White Space
 	$(call PRINT_MESSAGE,$(cIM),Debug build begin.)
-	$(call SUB_MAKE     ,doit O_ARCH=$(O_ARCH) O_TYPE=Debug SYMBOLS=-g)
+	$(call verify_directory,$(BIN_STAGING)$(O_ARCH)_debug)
+	$(call SUB_MAKE     ,doit O_ARCH=$(O_ARCH) O_TYPE=debug SYMBOLS=1)
 	$(call PRINT_MESSAGE,$(cNO),Debug build finished.)
 
 #
@@ -236,7 +276,8 @@ Debug debug dbg d:
 Release release rel r:
 	@echo # Intentional White Space
 	$(call PRINT_MESSAGE,$(cIM),Release build begin.)
-	$(call SUB_MAKE     ,doit O_ARCH=$(O_ARCH) O_TYPE=Release OPTIMIZE=3)
+	$(call verify_directory,$(BIN_STAGING)$(O_ARCH)_release)
+	$(call SUB_MAKE     ,doit O_ARCH=$(O_ARCH) O_TYPE=release OPTIMIZE=3)
 	$(call PRINT_MESSAGE,$(cNO),Release build finished.)
 
 #
@@ -245,56 +286,82 @@ Release release rel r:
 #
 .PHONY: Clean clean cln c
 Clean clean cln c:
-	$(foreach a, $(ARCHITECTURES),                        \
-		$(if $(call dir_exists,$(a)),                     \
-			$(foreach b,$(BUILDS),                        \
-				$(if $(call dir_exists,$(a)/$(b)),        \
-					$(call CLEAN_BUILD,$(a)/$(b))) ${NL}  \
-	         )                                            \
-			$(call RM,$(a)) ${NL}                         \
-		)                                                 \
+	$(foreach a, $(ARCHITECTURES),                         		\
+		$(if $(call dir_exists,$(O_OBJ)),                  		\
+			$(foreach b,$(BUILDS),                         		\
+				$(if $(call dir_exists,$(O_OBJ)/$(a)_$(b)),		\
+					$(call CLEAN_BUILD,$(a),$(b))) ${NL}   		\
+				$(if $(call dir_exists,$(BIN_STAGING)$(a)_$(b)),\
+				    $(call RM,$(BIN_STAGING)$(a)_$(b)) ${NL})   \
+	         )                                             		\
+			$(call RM,$(O_OBJ)) ${NL}                      		\
+		)                                                  		\
 	)
 	$(call PRINT_MESSAGE,$(cNO),Clean Finished.)
 
-#
+
 # Compile a cpp source file into LLVM byte-code file
 # --------------------------------------------------
-#
 $(O_INTER)/%.bc: %.cpp
-	$(call RUN_COMMAND,$(CXX) $(C_FLAGS) $(C_D) $(C_W) $(C_I) $(C_F) -o $@ $<)
+	$(call RUN_COMMAND,$(CXX) $(C_STD) $(C_FLAGS) $(C_D) $(C_W) $(C_I) $(C_F) -o $@ $<,$@,$<)
+
+# LLVM .bc to .o for inclusion in static library
+# --------------------------------------------------
+$(O_INTER)/%.o: $(O_INTER)/%.bc
+	$(call RUN_COMMAND,$(CXX) -c -o $@ $<,$@,$<)
+
+# Create .d files for tracking header dependencies 
+# --------------------------------------------------
+$(O_INTER)/%.d: %.cpp | $(O_INTER)
+	@$(if $(findstring Unknown,$(O_INTER)),,\
+		$(call LOG_COMMAND,\
+			$(CXX) $(C_STD) -MM $(C_I) $< | sed 's~\(.*\)\.o[ :]*~${O_INTER}/\1.bc $@: ~g' > $@))
+     
+
+#
+# Directory existence
+# -----------------------------------------------
+#
+$(BIN_STAGING)$(O_AT):
+	@$(if $(findstring Unknown,$(O_INTER)),,$(call verify_directory,$(BIN_STAGING)$(O_AT)))
+
+$(LIB_STAGING)$(O_AT):
+	@$(if $(findstring Unknown,$(O_INTER)),,$(call verify_directory,$(LIB_STAGING)$(O_AT)))
+
+$(O_INTER):
+	@$(if $(findstring Unknown,$(O_INTER)),,$(call verify_directory,$(O_INTER)))
+
 
 #
 # Link the target from all of the byte-code files
 # -----------------------------------------------
 #
-$(O_TARG): $(BC_FILES)
-	$(call RUN_COMMAND,$(CXX) $(SYMBOLS) $(BC_FILES) -o $(O_TARG) $(L_SEARCH) $(L_LIBRARIES))
+ifdef LIBRARY_MAKE
+ifneq ($(SO_TARG),)
+$(SO_TARG): $(SL_FILES) | $(LIB_STAGING)$(O_AT)
+	$(call MAKE_TARGET,$(AR) rcs $(SO_TARG) $(SL_FILES) )
+endif
+ifneq ($(DO_TARG),)
+$(DO_TARG): $(BC_FILES) | $(BIN_STAGING)$(O_AT)
+	$(call MAKE_TARGET,$(CXX) -shared $(L_FLAGS) $^ -o $@ )
+endif
+else
+$(EO_TARG): $(BC_FILES) | $(BIN_STAGING)$(O_AT)
+	$(call MAKE_TARGET,$(CXX) $(L_FLAGS) $(BC_FILES) -o $(EO_TARG) $(L_SEARCH) $(L_LIBS))
+endif
 
-#=======================================================================================================================
-#
-# Auto generated .d make rules
-#
-#
 
 #
 # Rule for creating sub-make .d rule files for include header change tracking
 # ---------------------------------------------------------------------------
 #
 $(D_FILES): $(SOURCES)
-	@$(if $(findstring Unknown,$(O_INTER)),echo -n,$(call verify_directory,$(O_INTER)))
-	@$(if $(findstring Unknown,$(O_INTER)),echo -n,$(GEN_PREREQUISITES))
 
-
-# Expanding D_FILES has ~something~ to do with the
-# include of them and the MAKECMDGOALS.
-#
-__UNUSED__=$(D_FILES)
-#
 ifneq (,$(findstring clean,$(MAKECMDGOALS)))
 # Don't include if we are cleaning
 else ifneq (,$(findstring wipe,$(MAKECMDGOALS)))
 # Don't include if we are cleaning
 else
-	-include $(D_FILES)
+-include $(D_FILES)
 endif
 
