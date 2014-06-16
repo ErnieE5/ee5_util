@@ -3,10 +3,13 @@
 COMPILER=clang++
 
 TESTS:=\
-	command_line\
+    command_line\
     atomic_stack\
     delegate\
     spin_locks\
+    memory_pools\
+    threading\
+    stopwatch\
 
 SOURCES:=\
     main.cpp\
@@ -16,7 +19,7 @@ TARGET:=ee5util_ft
 
 SYMBOLS=1
 
-LIBS:=\
+LIBS+=\
 	ee5_util
 
 default:

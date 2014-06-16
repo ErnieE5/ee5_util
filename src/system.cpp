@@ -33,7 +33,7 @@ program_log __ee5_log = nullptr;
 //
 int Startup(size_t c,const char* s)
 {
-    static std::atomic_ulong cStartCount;
+    static std::atomic_ulong cStartCount(0);
 
     if( ++cStartCount == 1 )
     {

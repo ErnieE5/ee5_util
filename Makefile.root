@@ -10,10 +10,10 @@ LIB_STAGING=$(BUILD_ROOT)lib/
 
 BUILD_LOGS=$(BUILD_ROOT)
 
-C_FLAGS=-static
+#C_FLAGS=-static
 
 LIB_PATHS=\
-	$(abspath $(BUILD_ROOT)lib/$(O_AT)) \
+	$(abspath $(BUILD_ROOT)bin/$(O_AT)) \
 	/usr/lib/gcc/x86_64-linux-gnu/4.7/ \
 
 LIBS+=\

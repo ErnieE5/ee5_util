@@ -26,6 +26,13 @@
 
 using namespace ee5;
 
+extern i_marshal_work* pool;
+
+void    tp_start();
+void    tp_stop();
+size_t  tp_pending();
+size_t  tp_count();
+
 template<typename L,size_t iterations = 800000>
 void run_lock_test(i_marshal_work* p)
 {
@@ -89,37 +96,40 @@ void run_lock_test(i_marshal_work* p)
         while( dd != s_ok() );
     }
 
-//     size_t xx;
-//     do
-//     {
-//         xx = p.Pending();
-// //        printf("%8lu %8lu\n",xx,c.load());
-//     }
-//     while(xx>0);
+    size_t xx;
+    do
+    {
+        xx = tp_pending();
+//        printf("%8lu %8lu\n",xx,c.load());
+    }
+    while(xx>0);
 
     size_t sum = std::accumulate(times.begin(),times.end(),0);
     auto mm = std::minmax_element(times.begin(),times.end());
     printf("-%10lu-",sum);
 
     printf("%12.8f m %9lu / ", sw.delta(), c.load());
-    //printf("%20lu us %9lu / ", sw.delta(), c.load());
-    // for(size_t b = 0;b < p.Count() ;b++)
-    // {
-    //     printf("%2lu:%9lu ",b,f[b]);
-    // }
+    for(size_t b = 0;b < tp_count() ;b++)
+    {
+        printf("%2lu:%9lu ",b,f[b]);
+    }
     printf("%lu us (%lu,%lu)\n",sum/iterations,*mm.first,*mm.second); fflush(stdout);
 }
 
 
+
+
 void tst_spin_locks()
 {
-    static constexpr size_t iterations = 8 * 100000000;
+    static constexpr size_t iterations = 8 * 10000;//0000;
 
-    i_marshal_work* p = nullptr;
-
-    run_lock_test<std::mutex,iterations>           (p);
-    run_lock_test<spin_posix,iterations>           (p);
-    run_lock_test<spin_mutex,iterations>           (p);
-    run_lock_test<spin_barrier,iterations>         (p);
-    run_lock_test<spin_shared_mutex_t,iterations>  (p);
+    tp_start();
+    
+    run_lock_test<std::mutex,iterations>           (pool);
+    run_lock_test<spin_posix,iterations>           (pool);
+    run_lock_test<spin_mutex,iterations>           (pool);
+    run_lock_test<spin_barrier,iterations>         (pool);
+    run_lock_test<spin_shared_mutex_t,iterations>  (pool);
+    
+    tp_stop();
 }

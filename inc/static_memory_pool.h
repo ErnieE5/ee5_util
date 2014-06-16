@@ -16,7 +16,9 @@
 #ifndef STATIC_MEMORY_POOL_H_
 #define STATIC_MEMORY_POOL_H_
 
-#include "atomic_stack.h"
+#include <atomic_stack.h>
+
+#include <memory>
 #include <array>
 #include <cstring>
 

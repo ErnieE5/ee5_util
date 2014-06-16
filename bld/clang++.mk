@@ -156,6 +156,7 @@ ifneq ($(TGT_BASE),)
    SO_TARG:=$(LIB_STAGING)$(O_AT)/$(TGT_BASE).a
   endif
   ifeq ($(findstring dynamic,$(LIBRARY_MAKE)),dynamic)
+   DO_LINK:=$(BIN_STAGING)$(O_AT)/$(TGT_BASE).so
    DO_TARG:=$(BIN_STAGING)$(O_AT)/$(TGT_BASE).so.$(LIBRARY_VER)
   endif
  else
@@ -344,6 +345,7 @@ endif
 ifneq ($(DO_TARG),)
 $(DO_TARG): $(BC_FILES) | $(BIN_STAGING)$(O_AT)
 	$(call MAKE_TARGET,$(CXX) -shared $(L_FLAGS) $^ -o $@ )
+	$(shell ln -s $(abspath $(DO_TARG)) $(DO_LINK))
 endif
 else
 $(EO_TARG): $(BC_FILES) | $(BIN_STAGING)$(O_AT)
