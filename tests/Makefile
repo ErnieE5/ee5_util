@@ -16,6 +16,9 @@ TARGET:=ee5util_ft
 
 SYMBOLS=1
 
+LIBS:=\
+	ee5_util
+
 default:
 	$(call SUB_MAKE,all)
 

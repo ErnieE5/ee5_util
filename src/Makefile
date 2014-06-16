@@ -1,6 +1,6 @@
 
 
-TARGET:=ee5_util
+TARGET:=libee5_util
 COMPILER=clang++
 
 LIBRARY_MAKE=dynamic static
