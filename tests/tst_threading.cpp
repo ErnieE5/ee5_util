@@ -29,7 +29,6 @@
 #include <vector>
 #include <string>
 #include <mutex>
-#include <shared_mutex>
 
 using namespace ee5;
 
@@ -67,8 +66,7 @@ private:
     using work_thread_t = ee5::WorkThread<qitem_t>;
     using tvec_t        = std::vector<work_thread_t>;
 
-//    spin_shared_mutex_t active;
-    std::shared_mutex   active;
+    spin_shared_mutex_t active;
 
     mem_pool_t          mem;
     tvec_t              threads;
@@ -185,11 +183,7 @@ public:
 };
 
 
-extern TP tp;
-
 #include <functional>
-
-
 
 
 static constexpr size_t threads = 8;
@@ -538,8 +532,8 @@ RC FunctionTests()
 
 i_marshal_work* pool = &tp;
 
-void    tp_start()      { tp_start();           }
-void    tp_stop()       { tp_stop();            }
+void    tp_start()      { tp.Start();           }
+void    tp_stop()       { tp.Shutdown();        }
 size_t  tp_pending()    { return tp.Pending();  }
 size_t  tp_count()      { return tp.Count();    }
 

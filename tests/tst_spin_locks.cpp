@@ -13,6 +13,7 @@
 // OTHER DEALINGS IN THE SOFTWARE.
 //
 
+#include <cstdio>
 #include <stopwatch.h>
 #include <spin_locking.h>
 #include <i_marshal_work.h>
@@ -100,7 +101,7 @@ void run_lock_test(i_marshal_work* p)
                 //      while( qq != s_ok() );
                 // }
             });
-            printf("\r %12lu 0x%016lx",x,dd);
+ //           printf("\r %12lu 0x%016lx",x,dd);
         }
         while( dd != s_ok() );
     }
@@ -130,7 +131,7 @@ void run_lock_test(i_marshal_work* p)
 
 void tst_spin_locks()
 {
-    static constexpr size_t iterations = 8 * 10;//000;//0000;
+    static constexpr size_t iterations = 8 * 1000000;
 
     tp_start();
 

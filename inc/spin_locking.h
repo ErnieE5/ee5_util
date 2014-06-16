@@ -109,6 +109,8 @@
 #include <atomic>
 #include <thread> // TODO: currently needed for spin_posix
 
+#include <stdio.h>
+
 namespace ee5
 {
 //-------------------------------------------------------------------------------------------------
