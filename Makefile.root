@@ -10,6 +10,11 @@ LIB_STAGING=$(BUILD_ROOT)lib/
 
 BUILD_LOGS=$(BUILD_ROOT)
 
+C_FLAGS=-static
 
-LIBRARIES?=\
+LIB_PATHS=\
+	$(abspath $(BUILD_ROOT)lib/$(O_AT)) \
+	/usr/lib/gcc/x86_64-linux-gnu/4.7/ \
+
+LIBS+=\
 	pthread \

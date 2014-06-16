@@ -197,7 +197,7 @@ void Moink()
 
 
 
-#include "i_marshal_work.h"
+#include "i_marshall_work.h"
 
 
 
@@ -503,7 +503,7 @@ public:
 };
 
 
-extern TP tp;
+extern TP p;
 
 #include <functional>
 
@@ -581,7 +581,7 @@ struct ThreadpoolTest
 
         for(unsigned long h = n;h > 2;h--)
         {
-            tp.Async( [&](unsigned long h)
+            p.Async( [&](unsigned long h)
             {
                 long double v = Factorial(h);
                 framed_lock( lock, [&] { total+=v; } );
@@ -599,7 +599,7 @@ struct ThreadpoolTest
 
 static constexpr size_t threads = 8;
 
-TP tp(threads);
+TP p(threads);
 
 
 //---------------------------------------------------------------------------------------------------------------------
@@ -616,7 +616,6 @@ RC FunctionTests()
     int             int_local       = 55555;
     double          double_local    = 55.555;
 
-TP& p = tp;
 
 //using spin_shared_mutex_t = spin_reader_writer_lock<is_32_bit>;
 
@@ -862,11 +861,11 @@ void App()
 {
     h_stopwatch_d sw;
 
-    tp.Start();
+    p.Start();
 
-    //FunctionTests();
+//    FunctionTests();
 
-    tp.Shutdown();
+    p.Shutdown();
 
     // LOG_ALWAYS("%s","互いに同胞の精神をもって行動しなければならない。");
     // LOG_ALWAYS("%s","请以手足关系的精神相对待");
@@ -1042,8 +1041,6 @@ void test_stopwatch()
 //
 int main()
 {
-	printf("Dude....\n");
-
     int iRet = ee5::Startup(0,nullptr);
 
     if( iRet == 0 )
@@ -1059,6 +1056,4 @@ int main()
 
     return 0;
 }
-
-
 

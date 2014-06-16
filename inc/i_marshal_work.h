@@ -18,6 +18,7 @@
 
 #include <error.h>
 #include <i_marshaled_call.h>
+#include <delegate.h>
 
 namespace ee5
 {
