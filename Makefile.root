@@ -1,20 +1,18 @@
 
 
-
 BUILD_ROOT:=$(dir $(lastword $(MAKEFILE_LIST)))
 BUILD_TOOLS:=$(BUILD_ROOT)bld/
 INCLUDE_PATHS=$(BUILD_ROOT)inc/
 
-BIN_STAGING=$(BUILD_ROOT)bin/
-LIB_STAGING=$(BUILD_ROOT)lib/
+BIN_STAGING=$(abspath $(BUILD_ROOT)bin/)
+LIB_STAGING=$(abspath $(BUILD_ROOT)lib/)
 
 BUILD_LOGS=$(BUILD_ROOT)
 
-#C_FLAGS=-static
+include $(BUILD_ROOT)Makefile.config
 
-LIB_PATHS=\
-	$(abspath $(BUILD_ROOT)bin/$(O_AT)) \
-	/usr/lib/gcc/x86_64-linux-gnu/4.7/ \
+
+#C_FLAGS=-static
 
 LIBS+=\
 	pthread \

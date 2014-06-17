@@ -128,25 +128,9 @@ private:
     }
 
 public:
-    TP(size_t t = std::thread::hardware_concurrency())
+    TP()
     {
-        std::srand(std::time(0));
         active.lock();
-
-        t_count = t;
-
-        // Create the threads first...
-        //
-        for(size_t c = t_count; c ; --c)
-        {
-            threads.push_back( work_thread_t( c, [](qitem_t& p) { p->Execute(); } ) );
-        }
-
-        // Start them.
-        for(auto& s : threads)
-        {
-            s.Startup();
-        }
     }
 
     size_t Pending()
@@ -169,8 +153,25 @@ public:
         }
     }
 
-    void Start()
+    void Start(size_t t = std::thread::hardware_concurrency())
     {
+        std::srand(std::time(0));
+
+        t_count = t;
+
+        // Create the threads first...
+        //
+        for(size_t c = t_count; c ; --c)
+        {
+            threads.push_back( work_thread_t( c, [](qitem_t& p) { p->Execute(); } ) );
+        }
+
+        // Start them.
+        for(auto& s : threads)
+        {
+            s.Startup();
+        }
+
         active.unlock();
     }
 
@@ -186,9 +187,7 @@ public:
 #include <functional>
 
 
-static constexpr size_t threads = 8;
-
-TP tp(threads);
+TP tp;
 
 
 
@@ -532,10 +531,10 @@ RC FunctionTests()
 
 i_marshal_work* pool = &tp;
 
-void    tp_start()      { tp.Start();           }
-void    tp_stop()       { tp.Shutdown();        }
-size_t  tp_pending()    { return tp.Pending();  }
-size_t  tp_count()      { return tp.Count();    }
+void    tp_start(size_t c)  { tp.Start(c);          }
+void    tp_stop()           { tp.Shutdown();        }
+size_t  tp_pending()        { return tp.Pending();  }
+size_t  tp_count()          { return tp.Count();    }
 
 
 

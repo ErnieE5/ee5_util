@@ -23,8 +23,6 @@ const size_t LogLine::msg_offset = offsetof(LogLine,msg);
 
 ConsoleLogger::thread_ptr ConsoleLogger::pThread;
 
-
-
 //---------------------------------------------------------------------------------------------------------------------
 //
 //

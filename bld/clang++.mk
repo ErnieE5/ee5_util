@@ -81,11 +81,15 @@ BUILDS          ?= debug release
 AR              := llvm-ar-3.5
 RANLIB          ?= llvm-ranlib
 CXX 			?= clang++
-LIBS 			?= stdc++
+LIBS 			+= stdc++
 
 O_AT:=$(O_ARCH)_$(O_TYPE)
 O_OBJ:=obj
 O_INTER:=$(O_OBJ)/$(O_AT)
+
+L_BIN:=$(BIN_STAGING)/$(O_AT)
+L_LIB:=$(LIB_STAGING)/$(O_AT)
+
 
 #==================================================================================================
 # Diagnostics or setup for missing required values.
@@ -133,7 +137,7 @@ FARGUMENTS ?= message-length=0
 # redirections of stdout to logs.
 #
 ifneq ($(strip $(color)),)
-FARGUMENTS+= color-diagnostics
+#FARGUMENTS+= color-diagnostics
 endif
 
 #==================================================================================================
@@ -153,14 +157,14 @@ ifneq ($(TGT_BASE),)
  ifdef LIBRARY_MAKE
   ifeq ($(findstring static,$(LIBRARY_MAKE)),static)
    SL_FILES:=$(BC_FILES:%.bc=%.o)
-   SO_TARG:=$(LIB_STAGING)$(O_AT)/$(TGT_BASE).a
+   SO_TARG:=$(L_LIB)/$(TGT_BASE).a
   endif
   ifeq ($(findstring dynamic,$(LIBRARY_MAKE)),dynamic)
-   DO_LINK:=$(BIN_STAGING)$(O_AT)/$(TGT_BASE).so
-   DO_TARG:=$(BIN_STAGING)$(O_AT)/$(TGT_BASE).so.$(LIBRARY_VER)
+   DO_LINK:=$(L_BIN)/$(TGT_BASE).so
+   DO_TARG:=$(L_BIN)/$(TGT_BASE).so.$(LIBRARY_VER)
   endif
  else
-  EO_TARG:=$(BIN_STAGING)$(O_AT)/$(TGT_BASE)
+  EO_TARG:=$(L_BIN)/$(TGT_BASE)
  endif
 else
 $(error You must specify a TARGET value.)
@@ -183,6 +187,8 @@ endif
 #
 ifeq ($(strip $(NO_LTO)),)
 L_FLAGS+= -flto
+else
+L_FLAGS+= -fPIC
 endif
 
 ifeq ($(strip $(SYMBOLS)),1)
@@ -203,6 +209,7 @@ endif
 C_FLAGS+= -O$(OPTIMIZE)
 
 CXX:=clang++
+
 
 #==================================================================================================
 #
@@ -247,7 +254,6 @@ endef
 #
 .PHONY: All all a
 All all a:
-	$(call RM,$(BL)) ${NL}
 	$(foreach b,$(BUILDS),$(call SUB_MAKE,$(b))${NL})
 	@echo # Intentional White Space
 #
@@ -264,10 +270,9 @@ doit: $(EO_TARG) $(SO_TARG) $(DO_TARG)
 .PHONY: Debug debug dbg d
 Debug debug dbg d:
 	@echo # Intentional White Space
-	$(call PRINT_MESSAGE,$(cIM),Debug build begin.)
-	$(call verify_directory,$(BIN_STAGING)$(O_ARCH)_debug)
+	$(call PRINT_MESSAGE,$(cIM),Debug build begin ($(TARGET)).)
 	$(call SUB_MAKE     ,doit O_ARCH=$(O_ARCH) O_TYPE=debug SYMBOLS=1)
-	$(call PRINT_MESSAGE,$(cNO),Debug build finished.)
+	$(call PRINT_MESSAGE,$(cNO),Debug build finished ($(TARGET)).)
 
 #
 # Build release target using a sub-build
@@ -276,10 +281,9 @@ Debug debug dbg d:
 .PHONY: Release release rel r
 Release release rel r:
 	@echo # Intentional White Space
-	$(call PRINT_MESSAGE,$(cIM),Release build begin.)
-	$(call verify_directory,$(BIN_STAGING)$(O_ARCH)_release)
+	$(call PRINT_MESSAGE,$(cIM),Release build begin ($(TARGET)).)
 	$(call SUB_MAKE     ,doit O_ARCH=$(O_ARCH) O_TYPE=release OPTIMIZE=3)
-	$(call PRINT_MESSAGE,$(cNO),Release build finished.)
+	$(call PRINT_MESSAGE,$(cNO),Release build finished ($(TARGET)).)
 
 #
 # Clean targets for both release and debug.
@@ -323,11 +327,11 @@ $(O_INTER)/%.d: %.cpp | $(O_INTER)
 # Directory existence
 # -----------------------------------------------
 #
-$(BIN_STAGING)$(O_AT):
-	@$(if $(findstring Unknown,$(O_INTER)),,$(call verify_directory,$(BIN_STAGING)$(O_AT)))
+$(L_BIN):
+	@$(if $(findstring Unknown,$(O_INTER)),,$(call verify_directory,$(L_BIN)))
 
-$(LIB_STAGING)$(O_AT):
-	@$(if $(findstring Unknown,$(O_INTER)),,$(call verify_directory,$(LIB_STAGING)$(O_AT)))
+$(L_LIB):
+	@$(if $(findstring Unknown,$(O_INTER)),,$(call verify_directory,$(L_LIB)))
 
 $(O_INTER):
 	@$(if $(findstring Unknown,$(O_INTER)),,$(call verify_directory,$(O_INTER)))
@@ -339,17 +343,17 @@ $(O_INTER):
 #
 ifdef LIBRARY_MAKE
 ifneq ($(SO_TARG),)
-$(SO_TARG): $(SL_FILES) | $(LIB_STAGING)$(O_AT)
+$(SO_TARG): $(SL_FILES) | $(L_LIB)
 	$(call MAKE_TARGET,$(AR) rcs $(SO_TARG) $(SL_FILES) )
 endif
 ifneq ($(DO_TARG),)
 comma:= ,
-$(DO_TARG): $(BC_FILES) | $(BIN_STAGING)$(O_AT)
+$(DO_TARG): $(BC_FILES) | $(L_BIN)
 	$(call MAKE_TARGET,$(CXX) -shared $(L_FLAGS) -Wl$(comma)-soname\$(comma)$(abspath $(DO_TARG)) $^ -o $@ )
 	$(shell ln -s $(abspath $(DO_TARG)) $(DO_LINK))
 endif
 else
-$(EO_TARG): $(BC_FILES) | $(BIN_STAGING)$(O_AT)
+$(EO_TARG): $(BC_FILES) | $(L_BIN)
 	$(call MAKE_TARGET,$(CXX) $(L_FLAGS) $(BC_FILES) -o $(EO_TARG) $(L_SEARCH) $(L_LIBS))
 endif
 

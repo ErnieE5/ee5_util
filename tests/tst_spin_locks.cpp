@@ -24,12 +24,13 @@
 #include <cstdio>
 #include <vector>
 #include <array>
+#include <unordered_map>
 
 using namespace ee5;
 
 extern i_marshal_work* pool;
 
-void    tp_start();
+void    tp_start(size_t);
 void    tp_stop();
 size_t  tp_pending();
 size_t  tp_count();
@@ -41,19 +42,94 @@ static long double Factorial(unsigned long n,long double a = 1)
     return Factorial(n-1, a * n );
 }
 
+#include <cxxabi.h>
+#include <utility>
+struct distroy_abi { void operator()(void* buffer) { free(buffer); } };
+using abi_name = std::unique_ptr<char,distroy_abi>;
 
-template<typename L,size_t iterations = 800000>
-void run_lock_test(i_marshal_work* p)
+template<typename T>
+abi_name typeidname()
 {
-    printf("rlt %-25.25s ",typeid(L).name()); fflush(stdout);
+    int status = 0;
+    return abi_name( abi::__cxa_demangle(typeid(T).name(),nullptr,nullptr,&status) );
+}
 
-    m_stopwatch_f       sw;
-    L                   lock;
-    std::vector<size_t> times;
-    std::atomic_size_t  a;
-    std::atomic_size_t  c;
-    long double         d = 0;
-    size_t              f[100] = { };
+
+struct stats
+{
+    abi_name    name;
+    float       total_time;
+    size_t      time_stalled;
+    size_t      mode_stalled;
+    size_t      min_stalled;
+    size_t      max_stalled;
+
+    size_t      mode_loop;
+    size_t      min_loop;
+    size_t      max_loop;
+    size_t      ave_loop;
+
+    size_t      iterations;
+    size_t      inner_loop;
+
+    stats
+    (
+        abi_name&&      n,
+        float           tt,
+        size_t          ts,
+        size_t          md,
+        size_t          mins,
+        size_t          maxs,
+        size_t          modl,
+        size_t          minl,
+        size_t          maxl,
+        size_t          avel,
+        size_t          i,
+        size_t          l
+    ) : name(std::move(n))
+    {
+        total_time      = tt;
+        time_stalled    = ts;
+        mode_stalled    = md,
+        min_stalled     = mins;
+        max_stalled     = maxs;
+        mode_loop       = modl;
+        min_loop        = minl;
+        max_loop        = maxl;
+        ave_loop        = avel;
+        iterations      = i;
+        inner_loop      = l;
+    }
+};
+
+template<typename T,typename...Comp>
+void sort(T& c,Comp...comp)
+{
+    std::sort(c.begin(),c.end(),comp...);
+}
+
+
+template<typename L>
+stats lock_test(i_marshal_work* p,size_t iterations = 800000,size_t inner = 100)
+{
+    auto name = typeidname<L>();
+
+    printf("%s\n",name.get());
+    fflush(stdout);
+
+    using un_map = std::unordered_map<size_t,size_t>;
+
+    m_stopwatch_f            sw;
+
+    L                        lock;
+    std::vector<size_t>      times;
+    un_map                   mode_work_data;
+    std::atomic_size_t       a;
+    size_t                   c = 0;
+    long double              d = 0;
+    size_t                   f[100] = { };
+    size_t                   fa = 0;
+    std::pair<size_t,size_t> mmf;
 
     times.reserve(iterations);
 
@@ -64,66 +140,79 @@ void run_lock_test(i_marshal_work* p)
         {
             dd = p->Async( [&]()
             {
-                long double ttf  = 0;
+                us_stopwatch_s factorial_loop_timer;
 
-                for(size_t q = 0;q < 100;q++)
+                long double ttf  = 0;
+                for(size_t q = 0;q < inner;q++)
                 {
                     ttf += Factorial(q*2);
                 }
+                size_t fact_time = factorial_loop_timer.delta();
 
-                us_stopwatch_s swt;
+                us_stopwatch_s lock_stall_timer;
                 lock.lock();
-                times.push_back(swt.delta());
+                times.push_back(lock_stall_timer.delta());
+
+                mode_work_data[fact_time]++;
 
                 static thread_local size_t tid = a++;
-
-                //size_t iter =
+                fa += fact_time;
                 c++;
                 f[tid]++;
                 d += ttf;
 
+                mmf = std::minmax( std::initializer_list<size_t>({ mmf.first, mmf.second, fact_time }) );
+
                 lock.unlock();
-
-                // for(size_t j = 0;j < 1;j++)
-                // {
-                //     RC qq = s_ok();
-
-                //      do
-                //      {
-                //         qq = p.Async( [&]()
-                //         {
-                //             long double ttg = ThreadpoolTest::Factorial(25);
-                //             lock.lock();
-                //             d += ttg;
-                //             lock.unlock();
-                //         });
-                //      }
-                //      while( qq != s_ok() );
-                // }
             });
- //           printf("\r %12lu 0x%016lx",x,dd);
         }
         while( dd != s_ok() );
     }
 
-    size_t xx;
-    do
-    {
-        xx = tp_pending();
-//        printf("%8lu %8lu\n",xx,c.load());
-    }
-    while(xx>0);
+    while(tp_pending() > 0);
 
-    size_t sum = std::accumulate(times.begin(),times.end(),0);
-    auto mm = std::minmax_element(times.begin(),times.end());
-    printf("-%10lu-",sum);
+    float total_time = sw.delta();
 
-    printf("%12.8f m %9lu / ", sw.delta(), c.load());
-    for(size_t b = 0;b < tp_count() ;b++)
+    size_t                      sum_stall  = 0;
+    size_t                      md_m = 0;
+    size_t                      mode_stall_value = 0;
+    size_t                      mode_work_value = 0;
+    std::pair<size_t,size_t>    mm_stall;
+    un_map                      mode_stall_data;
+    //un_map                      mode_work_groups;
+    for(size_t t : times)
     {
-        printf("%2lu:%9lu ",b,f[b]);
+        sum_stall += t;
+        mm_stall  = std::minmax( std::initializer_list<size_t>({ mm_stall.first, mm_stall.second, t }) );
+
+        mode_stall_data[t]++;
     }
-    printf("%lu us (%lu,%lu)\n",sum/iterations,*mm.first,*mm.second); fflush(stdout);
+    for(const auto& pss : mode_stall_data)
+    {
+        if( std::max( md_m, pss.second ) != md_m )
+        {
+            md_m                = pss.second;
+            mode_stall_value    = pss.first;
+        }
+    }
+    md_m = 0;
+    // for(const auto& pss : mode_work_data)
+    // {
+    //     mode_work_groups[pss.first/10] += pss.second;
+    // }
+    for(const auto& pss : mode_work_data)
+    {
+        if( std::max( md_m, pss.second ) != md_m )
+        {
+            md_m             = pss.second;
+            mode_work_value  = pss.first;
+        }
+    }
+
+
+    return stats(   std::move(name),
+                    total_time, sum_stall, mode_stall_value, mm_stall.first, mm_stall.second,
+                    mode_work_value, mmf.first, mmf.second, fa/iterations, iterations, inner );
 }
 
 
@@ -131,15 +220,60 @@ void run_lock_test(i_marshal_work* p)
 
 void tst_spin_locks()
 {
-    static constexpr size_t iterations = 8 * 1000000;
+    size_t concurrency  = 8;//std::thread::hardware_concurrency();
+    size_t iterations   = 100000;
+    size_t work_loop    = 1000;
 
-    tp_start();
+    tp_start(concurrency);
 
-    run_lock_test<std::mutex,iterations>           (pool);
-    run_lock_test<spin_posix,iterations>           (pool);
-    run_lock_test<spin_mutex,iterations>           (pool);
-    run_lock_test<spin_barrier,iterations>         (pool);
-    run_lock_test<spin_shared_mutex_t,iterations>  (pool);
+    std::array<std::function<stats()>,5> tests;
+
+    tests[0] = std::bind( lock_test<std::mutex>,            pool,iterations,work_loop );
+    tests[1] = std::bind( lock_test<spin_posix>,            pool,iterations,work_loop );
+    tests[2] = std::bind( lock_test<spin_mutex>,            pool,iterations,work_loop );
+    tests[3] = std::bind( lock_test<spin_barrier>,          pool,iterations,work_loop );
+    tests[4] = std::bind( lock_test<spin_shared_mutex_t>,   pool,iterations,work_loop );
+
+    std::random_shuffle( tests.begin(), tests.end() );
+
+    using vs_t = std::vector<stats>;
+    vs_t data;
+
+    for(auto& r : tests)
+    {
+        data.push_back( r() );
+    }
+
+    printf("%40.40s\n\n","");
+
+    auto slt = [](const stats& a,const stats& b)->bool
+    {
+        return a.total_time < b.total_time;
+    };
+
+    sort( data, slt );
+
+    printf("Concurrency:    %lu\n",concurrency);
+    printf("Scheduled:      %lu\n",iterations);
+    printf("Work loop:      %lu\n",work_loop);
+    printf("\n");
+
+    float base = data.back().total_time;
+
+    printf("                                 Blocking             Working                 \n");
+    printf("Barrier            total mode ave     max  mode   ave     max     Total       \n");
+    printf("------------ ---------------------------- ------------------- --------- ------\n");
+    for(auto& a: data)
+    {
+        printf("%-12.12s ",             a.name.get()+5);
+        printf("%11lu %4lu %3lu %7lu ", a.time_stalled,a.mode_stalled,a.time_stalled/a.iterations,a.max_stalled);
+        printf("%5lu %5lu %7lu ",       a.mode_loop,a.ave_loop,a.max_loop);
+        printf("%9.3f ",                a.total_time);
+        printf("%5.2f%%\n",             100-(a.total_time/base*100));
+    }
+    printf("------------ ---------------------------- ------------------- --------- ------\n");
+    printf("             ^^^^^^^^^^^ ^^^^ ^microseconds^^^^ ^^^^^ ^^^^^^^ ^minutes^\n\n");
+
 
     tp_stop();
 }

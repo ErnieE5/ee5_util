@@ -22,6 +22,9 @@ SYMBOLS=1
 LIBS+=\
 	ee5_util
 
+LIB_PATHS+=\
+	$(L_BIN)
+
 default:
 	$(call SUB_MAKE,all)
 

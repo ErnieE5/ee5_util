@@ -1,8 +1,11 @@
 
 DIRS:=src tests
 
+GOALS=r
+
 default:
-	@$(foreach d,$(DIRS),cd $(d) && $(MAKE) -S -s && cd ..;)
+	@$(call RM,$(BL)) ${NL}
+	@$(foreach d,$(DIRS),cd $(d) && $(MAKE) -S -s $(GOALS) && cd ..;)
 
 target_sup=\
 $(if $(wildcard $(2)Makefile.root),\

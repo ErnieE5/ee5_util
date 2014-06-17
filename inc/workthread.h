@@ -97,11 +97,11 @@ public:
 //
 // load is the max number of items to pull from the queue at a given time.
 //
-template<typename QItem,size_t load = 100>
+template<typename QItem,size_t load = 10>
 class WorkThread
 {
 private:
-    using mutex         = spin_mutex; // std::mutex;
+    using mutex         = spin_mutex;
     using thread_method = object_method_delegate<WorkThread,void>;
     using frame_lock    = std::lock_guard<mutex>;
     using work_queue    = std::queue<QItem>;
@@ -114,6 +114,8 @@ private:
     std::thread         thread;
     work_method         method;
 
+    // The following values must be accessed while owning data_lock
+    //
     mutex               data_lock;
     work_queue          queue;
     bool                quit    = false;
