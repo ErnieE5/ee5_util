@@ -84,8 +84,7 @@ struct pool_allocator
 
     T* allocate(size_type n,const_pointer hint = 0)
     {
-        size_t s = sizeof(T);
-
+//        size_t s = sizeof(T);
 //        printf("%lu : %s\n",s,typeid(T).name());
 
         return reinterpret_cast<T*>( malloc( n * sizeof(T) ) );
@@ -340,12 +339,6 @@ void T1()
 
     exit(0);
 }
-
-
-
-
-
-
 
 
 //-------------------------------------------------------------------------------------------------

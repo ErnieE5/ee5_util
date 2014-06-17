@@ -34,6 +34,7 @@ void    tp_start(size_t);
 void    tp_stop();
 size_t  tp_pending();
 size_t  tp_count();
+void    tp_park(size_t);
 
 
 static long double Factorial(unsigned long n,long double a = 1)
@@ -145,7 +146,7 @@ stats lock_test(i_marshal_work* p,size_t iterations = 800000,size_t inner = 100)
                 long double ttf  = 0;
                 for(size_t q = 0;q < inner;q++)
                 {
-                    ttf += Factorial(q*2);
+                    ttf += Factorial(q);
                 }
                 size_t fact_time = factorial_loop_timer.delta();
 
@@ -165,6 +166,11 @@ stats lock_test(i_marshal_work* p,size_t iterations = 800000,size_t inner = 100)
 
                 lock.unlock();
             });
+
+            if(dd != s_ok())
+            {
+                tp_park(1000);
+            }
         }
         while( dd != s_ok() );
     }
@@ -221,8 +227,8 @@ stats lock_test(i_marshal_work* p,size_t iterations = 800000,size_t inner = 100)
 void tst_spin_locks()
 {
     size_t concurrency  = 8;//std::thread::hardware_concurrency();
-    size_t iterations   = 100000;
-    size_t work_loop    = 1000;
+    size_t iterations   = 1000000000;
+    size_t work_loop    = 200;
 
     tp_start(concurrency);
 

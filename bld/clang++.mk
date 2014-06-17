@@ -137,7 +137,7 @@ FARGUMENTS ?= message-length=0
 # redirections of stdout to logs.
 #
 ifneq ($(strip $(color)),)
-#FARGUMENTS+= color-diagnostics
+FARGUMENTS+= color-diagnostics
 endif
 
 #==================================================================================================

@@ -42,14 +42,19 @@ using namespace ee5;
 class TP : public i_marshal_work
 {
 private:
-    using mem_pool_t    = static_memory_pool<128,1000000>;
+    ThreadEvent chill;
+
+    using mem_pool_t    = static_memory_pool<128,10000>;
 
     struct deleter
     {
-        mem_pool_t* pool;
+        // mem_pool_t* pool;
+        TP* pool;
 
         deleter()                   : pool(nullptr) { }
-        deleter(mem_pool_t& p)      : pool(&p)      { }
+        // deleter(mem_pool_t& p)      : pool(&p)      { }
+        // deleter(const deleter& p)   : pool(p.pool)  { }
+        deleter(TP& p)              : pool(&p)      { }
         deleter(const deleter& p)   : pool(p.pool)  { }
 
         void operator()(void* buffer)
@@ -57,7 +62,14 @@ private:
             reinterpret_cast<i_marshaled_call*>(buffer)->~i_marshaled_call();
             if(pool)
             {
-                pool->release( buffer );
+                pool->mem.release( buffer );
+                if( pool->c )
+                {
+                    if(--(pool->c) == 0)
+                    {
+                        pool->chill.Set();
+                    }
+                }
             }
         }
     };
@@ -73,6 +85,7 @@ private:
     size_t              t_count;
     std::atomic_size_t  x;
 
+    std::atomic_size_t  c;
 
     bool lock()
     {
@@ -119,13 +132,14 @@ private:
 
     RC enqueue_work(i_marshaled_call* p)
     {
-        threads[std::rand()%t_count].Enqueue( qitem_t( p, deleter(mem) ) );
+        threads[std::rand()%t_count].Enqueue( qitem_t( p, deleter(*this) ) );
         //threads[x%t_count].Enqueue( qitem_t( p, deleter(mem) ) );
         //threads[0].Enqueue( qitem_t( p, deleter(mem) ) );
         //threads[random()%8].Enqueue( qitem_t( p, deleter(mem) ) );
         ++x;
         return s_ok();
     }
+
 
 public:
     TP()
@@ -180,7 +194,11 @@ public:
         return t_count;
     }
 
-
+    void Park(size_t _c)
+    {
+        c=_c;
+        chill.Chill();
+    }
 };
 
 
@@ -535,7 +553,7 @@ void    tp_start(size_t c)  { tp.Start(c);          }
 void    tp_stop()           { tp.Shutdown();        }
 size_t  tp_pending()        { return tp.Pending();  }
 size_t  tp_count()          { return tp.Count();    }
-
+void    tp_park(size_t c)   { tp.Park(c);           }
 
 
 void tst_threading()

@@ -97,7 +97,7 @@ public:
 //
 // load is the max number of items to pull from the queue at a given time.
 //
-template<typename QItem,size_t load = 10>
+template<typename QItem,size_t load = 100>
 class WorkThread
 {
 private:
