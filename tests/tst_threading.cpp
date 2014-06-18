@@ -64,13 +64,13 @@ private:
             if(pool)
             {
                 pool->mem.release( buffer );
-                if( pool->c )
-                {
-                    if(--(pool->c) == 0)
-                    {
+                // if( pool->c )
+                // {
+                //     if(--(pool->c) == 0)
+                //     {
                         pool->chill.Set();
-                    }
-                }
+                //     }
+                // }
             }
         }
     };
@@ -84,9 +84,9 @@ private:
     mem_pool_t          mem;
     tvec_t              threads;
     size_t              t_count;
-    std::atomic_size_t  x;
 
-    std::atomic_size_t  c;
+    std::atomic_size_t  x;
+//    std::atomic_size_t  c;
 
     bool lock()
     {
@@ -145,6 +145,7 @@ private:
 public:
     TP()
     {
+        printf("%p %p\n",&active,&x);
         active.lock();
     }
 
@@ -197,7 +198,7 @@ public:
 
     void Park(size_t _c)
     {
-        c=_c;
+//        c=_c;
         chill.Chill();
     }
 };
@@ -490,7 +491,7 @@ RC FunctionTests()
 #ifdef _MSC_VER
 #define alignas(x) __declspec(align(x))
 #endif
-    alignas(128) spin_barrier lock;
+    alignas(128) spin_flag lock;
 
     std::list<size_t>   complete;
     auto join = [&lock,&complete](std::vector<int> add)

@@ -348,50 +348,17 @@ struct pool_allocator
 //
 int main()
 {
+printf("%lu\n",sizeof(std::atomic_flag));
+
     int iRet = ee5::Startup(0,nullptr);
 
     if( iRet == 0 )
     {
         LOG_ALWAYS("Good day!", "");
 
-        for (size_t i = 0; i < 1000; ++i)
-        {
-            LOG_ALWAYS("Stuff %lu ...", i);
-        }
-        
-        LOG_ALWAYS("Goodbye...", "");
-        LOG_ALWAYS("Goodbye...", "");
-        LOG_ALWAYS("Goodbye...", "");
-        LOG_ALWAYS("Goodbye...", "");
-        LOG_ALWAYS("Goodbye...", "");
-        LOG_ALWAYS("Goodbye...", "");
-        LOG_ALWAYS("Goodbye...", "");
-        LOG_ALWAYS("Goodbye...", "");
-        LOG_ALWAYS("Goodbye...", "");
-        LOG_ALWAYS("Goodbye...", "");
-        LOG_ALWAYS("Goodbye...", "");
-        LOG_ALWAYS("Goodbye...", "");
-        LOG_ALWAYS("Goodbye...", "");
-        LOG_ALWAYS("Goodbye...", "");
-        LOG_ALWAYS("Goodbye...", "");
-        //void tst_spin_locks();
-        //tst_spin_locks();
+        void tst_spin_locks();
+        tst_spin_locks();
 
-        LOG_ALWAYS("Goodbye...","");
-        LOG_ALWAYS("Goodbye...", "");
-        LOG_ALWAYS("Goodbye...", "");
-        LOG_ALWAYS("Goodbye...", "");
-        LOG_ALWAYS("Goodbye...", "");
-        LOG_ALWAYS("Goodbye...", "");
-        LOG_ALWAYS("Goodbye...", "");
-        LOG_ALWAYS("Goodbye...", "");
-        LOG_ALWAYS("Goodbye...", "");
-        LOG_ALWAYS("Goodbye...", "");
-        LOG_ALWAYS("Goodbye...", "");
-        LOG_ALWAYS("Goodbye...", "");
-        LOG_ALWAYS("Goodbye...", "");
-        LOG_ALWAYS("Goodbye...", "");
-        LOG_ALWAYS("Goodbye...", "");
         LOG_ALWAYS("Goodbye...", "");
 
         ee5::Shutdown();

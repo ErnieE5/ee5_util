@@ -18,9 +18,7 @@
 #include <spin_locking.h>
 #include <i_marshal_work.h>
 
-#ifndef _MSC_VER
-#include <threads.h>
-#else
+#ifdef _MSC_VER
 #define thread_local __declspec(thread)
 #endif
 
@@ -123,6 +121,23 @@ void sort(T& c,Comp...comp)
     std::sort(c.begin(),c.end(),comp...);
 }
 
+size_t time_it( std::function<void()> f )
+{
+    us_stopwatch_s start;
+    f();
+    return start.delta();
+}
+
+struct thread_id
+{
+    static std::atomic_size_t a;
+    size_t id;
+
+    thread_id() { id = a++; }
+    size_t operator()() const { return id; }
+    operator size_t()   const { return id; }
+};
+std::atomic_size_t thread_id::a;
 
 template<typename L>
 stats lock_test(i_marshal_work* p,size_t iterations,size_t inner)
@@ -134,12 +149,12 @@ stats lock_test(i_marshal_work* p,size_t iterations,size_t inner)
 
     using un_map = std::unordered_map<size_t,size_t>;
 
+    std::atomic_size_t       a;
     m_stopwatch_f            sw;
 
     L                        lock;
     std::vector<size_t>      times;
     un_map                   mode_work_data;
-    std::atomic_size_t       a;
     size_t                   c = 0;
     long double              d = 0;
     size_t                   f[100] = { };
@@ -164,13 +179,13 @@ stats lock_test(i_marshal_work* p,size_t iterations,size_t inner)
                 }
                 size_t fact_time = factorial_loop_timer.delta();
 
-                us_stopwatch_s lock_stall_timer;
-                lock.lock();
-                times.push_back(lock_stall_timer.delta());
+
+                times.push_back( time_it( [&] { lock.lock(); } ) );
 
                 mode_work_data[fact_time]++;
 
-                static thread_local size_t tid = 0; if(!tid) a++;
+                thread_local static thread_id tid;
+
                 fa += fact_time;
                 c++;
                 f[tid]++;
@@ -224,6 +239,7 @@ stats lock_test(i_marshal_work* p,size_t iterations,size_t inner)
         }
     }
 
+//    printf("Hey %lu\n",__);
 
     return stats(   std::move(name),
                     total_time, sum_stall, mode_stall_value, mm_stall.first, mm_stall.second,
@@ -236,24 +252,28 @@ stats lock_test(i_marshal_work* p,size_t iterations,size_t inner)
 void tst_spin_locks()
 {
     size_t concurrency  = std::thread::hardware_concurrency();
-    size_t iterations   = 10000000;
+    size_t iterations   = 1000000;
     size_t work_loop    = 200;
 
     tp_start(concurrency);
 
+    
+
     size_t x = 0;
-    std::array<std::function<stats()>,5> tests;
 
-    tests[x++] = std::bind( lock_test<std::mutex>,          pool, iterations, work_loop );
-    tests[x++] = std::bind( lock_test<spin_native>,         pool, iterations, work_loop );
-    tests[x++] = std::bind( lock_test<spin_mutex>,          pool, iterations, work_loop );
-    tests[x++] = std::bind( lock_test<spin_barrier>,        pool, iterations, work_loop );
-    tests[x++] = std::bind( lock_test<spin_shared_mutex_t>, pool, iterations, work_loop );
+    // tests[x++] = std::bind( lock_test<std::mutex>,          pool, iterations, work_loop );
+    // tests[x++] = std::bind( lock_test<spin_native>,         pool, iterations, work_loop );
+    // tests[x++] = std::bind( lock_test<spin_mutex>,          pool, iterations, work_loop );
+    // tests[x++] = std::bind( lock_test<spin_barrier>,        pool, iterations, work_loop );
+    // tests[x++] = std::bind( lock_test<spin_shared_mutex_t>, pool, iterations, work_loop );
 
-    std::random_shuffle( tests.begin(), tests.end() );
+    // std::random_shuffle( tests.begin(), tests.end() );
 
     using vs_t = std::vector<stats>;
     vs_t data;
+
+    std::array<std::function<stats()>,5> tests;
+    data.push_back( lock_test<spin_flag>(pool, iterations, work_loop) );
 
     for(auto& r : tests)
     {

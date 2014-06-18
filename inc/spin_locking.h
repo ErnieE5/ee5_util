@@ -114,21 +114,26 @@
 namespace ee5
 {
 //-------------------------------------------------------------------------------------------------
-// spin_barrier
+// spin_flag
 //
-//  The spin_barrier is an exclusive lock that uses the atomic flag as the core locking method to
+//  The spin_flag is an exclusive lock that uses the atomic flag as the core locking method to
 //  implement the barrier. Sometimes this can be faster because it is possible to save a reload
-//  of the expected value.
+//  of the expected value. 
+//
+//  **Important** Note:
+//  The data sizeof this element is a single byte on an intel platform. This is "cheap" for 
+//  memory, but be EXTRA careful that the data that is packed NEAR the storage of this 
+//  lock doesn't contain ANOTHER spin that can cuase REALLY weird deadlocks.
 //
 //  C++ concept: BasicLockable
 //
-class spin_barrier
+class spin_flag
 {
-    std::atomic_flag barrier;
+    std::atomic_flag barrier = ATOMIC_FLAG_INIT;
 
 public:
-    spin_barrier() { }
-    spin_barrier(const spin_barrier&) = delete;
+    spin_flag() { }
+    spin_flag(const spin_flag&) = delete;
 
     void lock()
     {
@@ -230,7 +235,7 @@ class spin_mutex
     static const std::memory_order relaxed = std::memory_order_relaxed;
     static const std::memory_order acquire = std::memory_order_acquire;
 
-    std::atomic_bool barrier;
+    alignas(64) std::atomic_bool barrier;
 
 public:
     spin_mutex(const spin_mutex&) = delete;
@@ -369,7 +374,7 @@ private:
     static_assert( (mask_shared > max_shared),                              "At least a single overflow bit is needed." );
     static_assert( (mask_shared & mask_exclusive) == 0,                     "No overlap of shared and exclusive bits allowed!" );
 
-    barrier_t  barrier;
+    alignas(64) barrier_t  barrier;
 
 public:
     spin_reader_writer_lock(const spin_reader_writer_lock&) = delete;
