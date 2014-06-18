@@ -18,9 +18,6 @@
 #include <spin_locking.h>
 #include <i_marshal_work.h>
 
-#ifdef _MSC_VER
-#define thread_local __declspec(thread)
-#endif
 
 #include <algorithm>
 #include <mutex>
@@ -128,13 +125,9 @@ size_t time_it( std::function<void()> f )
     return start.delta();
 }
 
-size_t gettid()
-{
-    static std::atomic_size_t a;
-    static thread_local size_t id = 0;
-    if (!id) { id = a++; }
-    return id;
-}
+
+extern size_t work_thread_id();
+
 
 template<typename L>
 stats lock_test(i_marshal_work* p,size_t iterations,size_t inner)
@@ -183,7 +176,7 @@ stats lock_test(i_marshal_work* p,size_t iterations,size_t inner)
 
                 fa += fact_time;
                 c++;
-                f[gettid()]++;
+                f[work_thread_id()]++;
                 d += ttf;
 
                 mmf = std::minmax( std::initializer_list<size_t>({ mmf.first, mmf.second, fact_time }) );

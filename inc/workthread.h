@@ -28,6 +28,8 @@
 #include <cassert>
 #include <array>
 
+
+
 namespace ee5
 {
 
@@ -124,6 +126,9 @@ private:
 
     void Thread()
     {
+        extern size_t the_thread_id;
+        the_thread_id = user_id;
+
         work_array  pending_work;
         bool        running = true;
 
@@ -274,6 +279,12 @@ public:
 
         return enqueued;
     }
+
+    static size_t userid()
+    {
+        return id;
+    }
+
 };
 
 

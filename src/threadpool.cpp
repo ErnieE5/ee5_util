@@ -16,9 +16,13 @@
 
 #include "threadpool.h"
 
+#ifdef _MSC_VER
+#define thread_local __declspec(thread)
+#endif
 
+thread_local size_t the_thread_id;
 
-void something()
+size_t work_thread_id()
 {
-
+    return the_thread_id;
 }
