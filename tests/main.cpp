@@ -346,12 +346,8 @@ struct pool_allocator
 //
 //
 //
-void fart();
 int main()
 {
-    fart();
-printf("%lu\n",sizeof(std::atomic_flag));
-
     int iRet = ee5::Startup(0,nullptr);
 
     if( iRet == 0 )

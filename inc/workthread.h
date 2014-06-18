@@ -100,6 +100,7 @@ public:
 //
 // load is the max number of items to pull from the queue at a given time.
 //
+void set_id(size_t);
 template<typename QItem,size_t load = 100>
 class WorkThread
 {
@@ -126,7 +127,6 @@ private:
 
     void Thread()
     {
-        void set_id(size_t);
         set_id(user_id);
 
         work_array  pending_work;

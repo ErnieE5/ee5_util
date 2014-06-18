@@ -23,14 +23,7 @@
 
 #include <stdio.h>
 
-void fart()
-{
-	printf("poot\n");
-}
-
 static size_t thread_local the_thread_id;
-
-
 
 namespace ee5
 {
@@ -41,7 +34,7 @@ size_t  work_thread_id()
     return the_thread_id;
 }
 
-void   set_id(size_t i)
+void set_id(size_t i)
 {
 	the_thread_id = i;
 }
