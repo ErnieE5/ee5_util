@@ -15,14 +15,36 @@
 
 
 #include "threadpool.h"
+#include <cstddef>
 
 #ifdef _MSC_VER
 #define thread_local __declspec(thread)
 #endif
 
-thread_local size_t the_thread_id;
+#include <stdio.h>
 
-size_t work_thread_id()
+void fart()
+{
+	printf("poot\n");
+}
+
+static size_t thread_local the_thread_id;
+
+
+
+namespace ee5
+{
+
+//__attribute__ ((visibility ("external")))
+size_t  work_thread_id()
 {
     return the_thread_id;
+}
+
+void   set_id(size_t i)
+{
+	the_thread_id = i;
+}
+
+
 }

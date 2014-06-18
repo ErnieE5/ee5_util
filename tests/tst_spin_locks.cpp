@@ -125,10 +125,7 @@ size_t time_it( std::function<void()> f )
     return start.delta();
 }
 
-
-extern size_t work_thread_id();
-
-
+namespace ee5 { size_t work_thread_id(); }
 template<typename L>
 stats lock_test(i_marshal_work* p,size_t iterations,size_t inner)
 {
@@ -240,7 +237,7 @@ stats lock_test(i_marshal_work* p,size_t iterations,size_t inner)
 void tst_spin_locks()
 {
     size_t concurrency  = std::thread::hardware_concurrency();
-    size_t iterations   = 1000000;
+    size_t iterations   = 100000000;
     size_t work_loop    = 200;
 
     tp_start(concurrency);
