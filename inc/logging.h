@@ -46,9 +46,11 @@ extern program_log __ee5_log;
 
 
 
-
-
+#ifdef _MSC_VER
+#define FUNCTION_NAME __FUNCTION__
+#else
 #define FUNCTION_NAME __PRETTY_FUNCTION__
+#endif
 
 #define _TRACE_N(funcname,fmt,...) \
     do\

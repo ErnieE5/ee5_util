@@ -144,7 +144,7 @@ template<typename TFunction, typename TReturn, typename ...TArgs>
 class marshal_delegate
 {
     public:
-    static constexpr size_t argument_count = sizeof...(TArgs);
+    static const size_t argument_count = sizeof...(TArgs);
 
 private:
     template<int...>        struct sequence                        {};

@@ -14,7 +14,7 @@
 //
 #include "console_logger.h"
 #include "workthread.h"
-
+#include <cstdarg>
 
 namespace ee5
 {
@@ -32,7 +32,7 @@ RC cb_vsnprintf(size_t c,char* p,size_t* pc,char** ppP,const char* fmt,va_list v
 {
     int i = std::vsnprintf(p,c,fmt,v);
 
-    if( i < 0 || i > c )
+    if( i < 0 || static_cast<size_t>(i) > c )
     {
         return e_overflow();
     }
@@ -65,7 +65,7 @@ void ConsoleLogger::console_log(const __info* i,...)
 
     if( rc == s_ok() )
     {
-        pLogLine->time  = clock_t::now();
+        pLogLine->time  = hrc_t::now();
         pLogLine->id    = std::this_thread::get_id();
         pLogLine->info  = i;
 

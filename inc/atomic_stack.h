@@ -53,8 +53,8 @@ private:
     // These are re declarations because the verbosity of the
     // enumerations causes massively long lines.
     //
-    static constexpr std::memory_order release = std::memory_order_release;
-    static constexpr std::memory_order relaxed = std::memory_order_relaxed;
+    static const std::memory_order release = std::memory_order_release;
+    static const std::memory_order relaxed = std::memory_order_relaxed;
 
     std::atomic<T*> top; // Atomic storage for the top of the stack
 

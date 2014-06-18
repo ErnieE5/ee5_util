@@ -25,6 +25,7 @@
 #include <cstdint>
 #include <cstddef>
 #include <cstdlib>
+#include <ctime>
 #include <memory>
 #include <chrono>
 #include <thread>
@@ -42,7 +43,7 @@ namespace ee5
 //
 //
 struct
-    __attribute__ ((visibility ("default")))
+//    __attribute__ ((visibility ("default")))
 //    alignas(size_t)
 LogLine
 {
@@ -89,7 +90,7 @@ LogLine
 
 
 
-typedef typename LogLine::log_line_ptr LogLinePtr;
+typedef /*typename*/ LogLine::log_line_ptr LogLinePtr;
 
 RC cb_vsnprintf(size_t c,char* p,size_t* pc,char** ppP,const char* fmt,va_list v);
 
@@ -99,32 +100,46 @@ RC cb_vsnprintf(size_t c,char* p,size_t* pc,char** ppP,const char* fmt,va_list v
 //
 //
 //
+namespace c = std::chrono;
 class ConsoleLogger
 {
 private:
-    using clock_t    = std::chrono::high_resolution_clock;
-    using thread_t   = WorkThread<LogLinePtr>;
-    using thread_ptr = std::unique_ptr<thread_t>;
-
+    using hrc_t         = c::high_resolution_clock;
+    using sys_t         = c::system_clock;
+    using time_point    = c::high_resolution_clock::time_point;
+    using thread_t      = WorkThread<LogLinePtr>;
+    using thread_ptr    = std::unique_ptr<thread_t>;
+    using milli         = c::duration<uint64_t, std::milli>;
+    using micro         = c::duration<uint64_t, std::micro>;
     static thread_ptr pThread;
 
     static void console_log(const __info* i,...);
 
     static void Doit(LogLinePtr& pLL)
     {
-        time_t now = clock_t::to_time_t(pLL->time);
-        clock_t::time_point now_s = std::chrono::system_clock::from_time_t(now);
+        // Convert the HRC time captured to time_t system clock representation 
+        // then, convert it back. This will give use a value without the 
+        // micro/milliseconds as the system clock truncates the value to seconds.
+        // The duration between the two is the fractional part which gets 
+        // converted to the millisecond or microsecond value for the time stamp.
+        //
+        time_t          now     = hrc_t::to_time_t(pLL->time);
+        time_point      now_s   = sys_t::from_time_t(now);
+        hrc_t::duration d       = pLL->time - now_s;
 
         char buf[100];
-        std::strftime(buf, sizeof(buf), "%FT%T", gmtime(&now));
-        typedef std::chrono::duration<uint64_t,std::micro>  mi;
+        std::strftime(buf, sizeof(buf), "%Y-%m-%dT%H:%M:%S", std::gmtime(&now));
 
-        auto fraction = std::chrono::duration_cast<mi>(pLL->time-now_s).count();
-
+#ifdef _MSC_VER
+        auto  fraction  = c::duration_cast<milli>(d).count();
+        printf("[%s.%03luZ]|%s|:%lx %s %s\n", buf, fraction, pLL->info->facility, pLL->id, pLL->info->function, pLL->msg);
+#else
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wformat"
-        printf("[%s.%06luZ]|%s|:%lx %s%s\n",buf, fraction,pLL->info->facility,pLL->id,pLL->info->function,pLL->msg);
+        auto  fraction  = c::duration_cast<micro>(d).count();
+        printf("[%s.%06luZ]|%s|:%lx %s %s\n",buf, fraction,pLL->info->facility,pLL->id,pLL->info->function,pLL->msg);
 #pragma GCC diagnostic pop
+#endif
     }
 
 protected:

@@ -93,10 +93,11 @@ private:
         // When the buffer (memory region) is "owned" by the cache, the member next is
         // used for storage of items below in the stack,
         //
+        using buffer_t = typename std::aligned_storage<item_size,align>::type;
         union
         {
-            unsigned char data[item_size] __attribute__ ((aligned (align)));
-            pool_buffer*  next;
+            buffer_t        data;
+            pool_buffer*    next;
         };
     };
 

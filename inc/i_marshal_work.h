@@ -44,7 +44,7 @@ private:
     struct ref_val
     {
         typedef typename std::conditional<
-        /* if */    std::is_scalar<Arg>::value,
+        /* if */    std::is_scalar<Arg>::value || std::is_trivial<Arg>::value,
         /* then */  Arg,
         /* else */  typename std::add_lvalue_reference<Arg>::type
         >::type value_type;

@@ -19,3 +19,12 @@ x86_*
 .kdev4
 ee5_util.kdev4
 *.sublime*
+
+x64*
+ee5_util.opensdf
+ee5_util.sdf
+ee5_util.sln
+ee5_util.v12.suo
+ee5_util.vcxproj
+ee5_util.vcxproj.filters
+ee5_util.vcxproj.user

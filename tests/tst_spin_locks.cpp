@@ -18,6 +18,12 @@
 #include <spin_locking.h>
 #include <i_marshal_work.h>
 
+#ifndef _MSC_VER
+#include <threads.h>
+#else
+#define thread_local __declspec(thread)
+#endif
+
 #include <algorithm>
 #include <mutex>
 #include <numeric>
@@ -37,12 +43,13 @@ size_t  tp_count();
 void    tp_park(size_t);
 
 
-static long double Factorial(unsigned long n,long double a = 1)
+static long double Factorial(size_t n,long double a = 1)
 {
     if( n == 0 ) return a;
     return Factorial(n-1, a * n );
 }
 
+#ifndef _MSC_VER
 #include <cxxabi.h>
 #include <utility>
 struct distroy_abi { void operator()(void* buffer) { free(buffer); } };
@@ -54,7 +61,14 @@ abi_name typeidname()
     int status = 0;
     return abi_name( abi::__cxa_demangle(typeid(T).name(),nullptr,nullptr,&status) );
 }
-
+#else
+struct abi_name
+{
+    const char * name;
+    const char * get() { return name + 6; }
+};
+template<typename T> abi_name typeidname() { return { typeid(T).name() }; }
+#endif
 
 struct stats
 {
@@ -111,7 +125,7 @@ void sort(T& c,Comp...comp)
 
 
 template<typename L>
-stats lock_test(i_marshal_work* p,size_t iterations = 800000,size_t inner = 100)
+stats lock_test(i_marshal_work* p,size_t iterations,size_t inner)
 {
     auto name = typeidname<L>();
 
@@ -156,7 +170,7 @@ stats lock_test(i_marshal_work* p,size_t iterations = 800000,size_t inner = 100)
 
                 mode_work_data[fact_time]++;
 
-                static thread_local size_t tid = a++;
+                static thread_local size_t tid = 0; if(!tid) a++;
                 fa += fact_time;
                 c++;
                 f[tid]++;
@@ -185,7 +199,6 @@ stats lock_test(i_marshal_work* p,size_t iterations = 800000,size_t inner = 100)
     size_t                      mode_work_value = 0;
     std::pair<size_t,size_t>    mm_stall;
     un_map                      mode_stall_data;
-    //un_map                      mode_work_groups;
     for(size_t t : times)
     {
         sum_stall += t;
@@ -202,10 +215,6 @@ stats lock_test(i_marshal_work* p,size_t iterations = 800000,size_t inner = 100)
         }
     }
     md_m = 0;
-    // for(const auto& pss : mode_work_data)
-    // {
-    //     mode_work_groups[pss.first/10] += pss.second;
-    // }
     for(const auto& pss : mode_work_data)
     {
         if( std::max( md_m, pss.second ) != md_m )
@@ -226,19 +235,20 @@ stats lock_test(i_marshal_work* p,size_t iterations = 800000,size_t inner = 100)
 
 void tst_spin_locks()
 {
-    size_t concurrency  = 8;//std::thread::hardware_concurrency();
-    size_t iterations   = 1000000000;
+    size_t concurrency  = std::thread::hardware_concurrency();
+    size_t iterations   = 10000000;
     size_t work_loop    = 200;
 
     tp_start(concurrency);
 
+    size_t x = 0;
     std::array<std::function<stats()>,5> tests;
 
-    tests[0] = std::bind( lock_test<std::mutex>,            pool,iterations,work_loop );
-    tests[1] = std::bind( lock_test<spin_posix>,            pool,iterations,work_loop );
-    tests[2] = std::bind( lock_test<spin_mutex>,            pool,iterations,work_loop );
-    tests[3] = std::bind( lock_test<spin_barrier>,          pool,iterations,work_loop );
-    tests[4] = std::bind( lock_test<spin_shared_mutex_t>,   pool,iterations,work_loop );
+    tests[x++] = std::bind( lock_test<std::mutex>,          pool, iterations, work_loop );
+    tests[x++] = std::bind( lock_test<spin_native>,         pool, iterations, work_loop );
+    tests[x++] = std::bind( lock_test<spin_mutex>,          pool, iterations, work_loop );
+    tests[x++] = std::bind( lock_test<spin_barrier>,        pool, iterations, work_loop );
+    tests[x++] = std::bind( lock_test<spin_shared_mutex_t>, pool, iterations, work_loop );
 
     std::random_shuffle( tests.begin(), tests.end() );
 
@@ -247,7 +257,7 @@ void tst_spin_locks()
 
     for(auto& r : tests)
     {
-        data.push_back( r() );
+        if (r) data.push_back( r() );
     }
 
     printf("%40.40s\n\n","");
@@ -271,7 +281,7 @@ void tst_spin_locks()
     printf("------------ ---------------------------- ------------------- --------- ------\n");
     for(auto& a: data)
     {
-        printf("%-12.12s ",             a.name.get()+5);
+        printf("%-12.12s ",             a.name.get() +5 );
         printf("%11lu %4lu %3lu %7lu ", a.time_stalled,a.mode_stalled,a.time_stalled/a.iterations,a.max_stalled);
         printf("%5lu %5lu %7lu ",       a.mode_loop,a.ave_loop,a.max_loop);
         printf("%9.3f ",                a.total_time);

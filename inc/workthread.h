@@ -26,6 +26,7 @@
 #include <queue>
 #include <thread>
 #include <cassert>
+#include <array>
 
 namespace ee5
 {

@@ -124,7 +124,7 @@ namespace ee5
 //
 class spin_barrier
 {
-    std::atomic_flag barrier = ATOMIC_FLAG_INIT;
+    std::atomic_flag barrier;
 
 public:
     spin_barrier() { }
@@ -142,10 +142,9 @@ public:
 };
 
 
-// TODO: add guard when POSIX is missing
 
 //-------------------------------------------------------------------------------------------------
-// spin_posix
+// spin_native
 //
 //  This routine uses the underlying POSIX routines to implement the spin lock. Can be a little
 //  slower as the implementation isn't always inline optimized. This barrier will generally
@@ -154,17 +153,48 @@ public:
 //
 //  C++ concept: Lockable
 //
-class spin_posix
+#ifdef _MSC_VER
+#define NOMINMAX
+#include <windows.h>
+class spin_native
+{
+    size_t l;
+
+
+public:
+    spin_native(const spin_native&) = delete;
+    spin_native()
+    {
+        l = 0;
+    }
+    ~spin_native()
+    {
+    }
+    void lock()
+    {
+        while (InterlockedCompareExchange(&l, 1, 0));
+    }
+    void unlock()
+    {
+        InterlockedExchange(&l, 0);
+    }
+    bool try_lock()
+    {
+        return InterlockedCompareExchange(&l, 1, 0) == 1;
+    }
+};
+#else
+class spin_native
 {
     pthread_spinlock_t l;
 
 public:
-    spin_posix(const spin_posix&) = delete;
-    spin_posix()
+    spin_native(const spin_native&) = delete;
+    spin_native()
     {
         pthread_spin_init(&l,0);
     }
-    ~spin_posix()
+    ~spin_native()
     {
         pthread_spin_destroy(&l);
     }
@@ -181,6 +211,7 @@ public:
         return pthread_spin_trylock(&l) == 0;
     }
 };
+#endif
 
 
 //-------------------------------------------------------------------------------------------------
@@ -195,9 +226,9 @@ public:
 //
 class spin_mutex
 {
-    static constexpr std::memory_order release = std::memory_order_release;
-    static constexpr std::memory_order relaxed = std::memory_order_relaxed;
-    static constexpr std::memory_order acquire = std::memory_order_acquire;
+    static const std::memory_order release = std::memory_order_release;
+    static const std::memory_order relaxed = std::memory_order_relaxed;
+    static const std::memory_order acquire = std::memory_order_acquire;
 
     std::atomic_bool barrier;
 
@@ -279,11 +310,11 @@ struct is_32_bit
     using  value_type   = uint_fast32_t;
     using  barrier_type = std::atomic_uint_fast32_t;
 
-    static constexpr value_type addend_exclusive    = 0x00100000;
-    static constexpr value_type mask_exclusive      = 0x7FF00000;
-    static constexpr value_type max_exclusive       = 0x3FF00000;
-    static constexpr value_type mask_shared         = 0x0007FFFF;
-    static constexpr value_type max_shared          = 0x0003FFFF;
+    static const value_type addend_exclusive    = 0x00100000;
+    static const value_type mask_exclusive      = 0x7FF00000;
+    static const value_type max_exclusive       = 0x3FF00000;
+    static const value_type mask_shared         = 0x0007FFFF;
+    static const value_type max_shared          = 0x0003FFFF;
 };
 
 struct is_64_bit
@@ -293,11 +324,11 @@ struct is_64_bit
     using  value_type   = uint_fast64_t;
     using  barrier_type = std::atomic_uint_fast64_t;
 
-    static constexpr value_type addend_exclusive    = 0x0000100000000000;
-    static constexpr value_type mask_exclusive      = 0x1FFFF00000000000;
-    static constexpr value_type max_exclusive       = 0x0FFFF00000000000;
-    static constexpr value_type mask_shared         = 0x000001FFFFFFFFFF;
-    static constexpr value_type max_shared          = 0x000000FFFFFFFFFF;
+    static const value_type addend_exclusive    = 0x0000100000000000;
+    static const value_type mask_exclusive      = 0x1FFFF00000000000;
+    static const value_type max_exclusive       = 0x0FFFF00000000000;
+    static const value_type mask_shared         = 0x000001FFFFFFFFFF;
+    static const value_type max_shared          = 0x000000FFFFFFFFFF;
 };
 
 
@@ -315,18 +346,18 @@ template<typename traits = typename std::conditional<is_64_bit::value,is_64_bit,
 class spin_reader_writer_lock
 {
 private:
-    static constexpr std::memory_order release = std::memory_order_release;
-    static constexpr std::memory_order relaxed = std::memory_order_relaxed;
-    static constexpr std::memory_order acquire = std::memory_order_acquire;
+    static const std::memory_order release = std::memory_order_release;
+    static const std::memory_order relaxed = std::memory_order_relaxed;
+    static const std::memory_order acquire = std::memory_order_acquire;
 
     using storage_t = typename traits::value_type;
     using barrier_t = typename traits::barrier_type;
 
-    static constexpr storage_t addend_exclusive = traits::addend_exclusive;
-    static constexpr storage_t mask_exclusive   = traits::mask_exclusive;
-    static constexpr storage_t max_exclusive    = traits::max_exclusive;
-    static constexpr storage_t mask_shared      = traits::mask_shared;
-    static constexpr storage_t max_shared       = traits::max_shared;
+    static const storage_t addend_exclusive = traits::addend_exclusive;
+    static const storage_t mask_exclusive   = traits::mask_exclusive;
+    static const storage_t max_exclusive    = traits::max_exclusive;
+    static const storage_t mask_shared      = traits::mask_shared;
+    static const storage_t max_shared       = traits::max_shared;
 
     // Just a little safety for folks that might want to change the
     // behavior of the routines.

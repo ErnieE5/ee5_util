@@ -28,6 +28,7 @@
 #include <cassert>
 #include <cstddef>
 #include <cstring>
+#include <ctime>
 #include <type_traits>
 #include <iostream>
 #include <algorithm>
@@ -197,7 +198,7 @@ void Moink()
 
 
 
-#include "i_marshall_work.h"
+#include "i_marshal_work.h"
 
 
 
@@ -250,107 +251,107 @@ struct pool_allocator
     };
 };
 
-#include <sys/mman.h>
-#include <unistd.h>
-#include <pthread.h>
-
-template< int IS, int IC, int A = cache_alignment_intel_x86_64 >
-class growing_memory_pool : private static_memory_pool<IS,IC,A>
-{
-private:
-    // This internal structure is mostly notational to avoid overuse of
-    // casting between the various usage of the memory.
-    //
-    struct pool_buffer
-    {
-        // When the buffer has been acquired by the user the entire byte range
-        // between the base and base+item_size is "yours to use" as if you called
-        // calloc(1,item_size);
-        //
-        // When the buffer (memory region) is "owned" by the cache, the member next is
-        // used for storage of items below in the stack,
-        //
-        union
-        {
-            unsigned char data[IS] __attribute__ ((aligned (A)));
-            pool_buffer*  next;
-        };
-    };
-
-
-public:
-    static const size_t max_item_size   = IS;
-    static const size_t max_item_count  = IC;
-    static const size_t cache_alignment = A;
-    static const size_t pool_size       = IC * sizeof(pool_buffer);
-
-    growing_memory_pool()
-    {
-        printf("_SC_LEVEL1_ICACHE_LINESIZE %lu\n",sysconf(_SC_LEVEL1_ICACHE_LINESIZE));
-        printf("_SC_LEVEL1_DCACHE_LINESIZE %lu\n",sysconf(_SC_LEVEL1_DCACHE_LINESIZE));
-        printf("_SC_LEVEL2_CACHE_LINESIZE  %lu\n",sysconf(_SC_LEVEL2_CACHE_LINESIZE));
-        printf("_SC_LEVEL3_CACHE_LINESIZE  %lu\n",sysconf(_SC_LEVEL3_CACHE_LINESIZE));
-        printf("_SC_LEVEL4_CACHE_LINESIZE  %lu\n",sysconf(_SC_LEVEL4_CACHE_LINESIZE));
-        printf("_SC_READER_WRITER_LOCKS    %lu\n",sysconf(_SC_READER_WRITER_LOCKS));
-        printf("_SC_CLOCK_SELECTION        %lu\n",sysconf(_SC_CLOCK_SELECTION));
-
+//#include <sys/mman.h>
+//#include <unistd.h>
+//#include <pthread.h>
 //
-
-// pthread_condattr_t attr;
-// __clockid_t clock_id;
-// int ret;
-
-// ret = pthread_condattr_getclock(&attr &clock_id);
-
-        char data[1000];
-        confstr(_CS_GNU_LIBC_VERSION,data,sizeof(data));
-        printf("_CS_GNU_LIBC_VERSION %s\n",data);
-
-        confstr(_CS_GNU_LIBPTHREAD_VERSION,data,sizeof(data));
-        printf("_CS_GNU_LIBPTHREAD_VERSION %s\n",data);
-
-        confstr(_CS_PATH,data,sizeof(data));
-        printf("_CS_PATH %s\n",data);
-
-        confstr(_CS_POSIX_V7_LP64_OFF64_CFLAGS,data,sizeof(data));
-        printf("_CS_POSIX_V7_LP64_OFF64_CFLAGS %s\n",data);
-
-        confstr(_CS_V7_ENV,data,sizeof(data));
-        printf("_CS_V7_ENV %s\n",data);
-
-
-
-        size_t g = (sysconf(_SC_PAGESIZE)/sizeof(pool_buffer)   );
-
-        printf("%16lx  %lu\n",pool_size,g);
-
-
-
-        void* pmem = mmap(0,g*100,PROT_READ|PROT_WRITE, MAP_ANON|MAP_SHARED,-1,0);
-
-        printf("%16p\n",pmem);
-    }
-
-
-    void release(void* buffer)
-    {
-        static_memory_pool<IS,IC,A>::release(buffer);
-    }
-
-
-    void* acquire()
-    {
-        return static_memory_pool<IS,IC,A>::acquire();
-    }
-
-};
-
-
-void grow_test()
-{
-    growing_memory_pool<128,10000> d;
-
-}
+//template< int IS, int IC, int A = cache_alignment_intel_x86_64 >
+//class growing_memory_pool : private static_memory_pool<IS,IC,A>
+//{
+//private:
+//    // This internal structure is mostly notational to avoid overuse of
+//    // casting between the various usage of the memory.
+//    //
+//    struct pool_buffer
+//    {
+//        // When the buffer has been acquired by the user the entire byte range
+//        // between the base and base+item_size is "yours to use" as if you called
+//        // calloc(1,item_size);
+//        //
+//        // When the buffer (memory region) is "owned" by the cache, the member next is
+//        // used for storage of items below in the stack,
+//        //
+//        union
+//        {
+//            unsigned char data[IS] __attribute__ ((aligned (A)));
+//            pool_buffer*  next;
+//        };
+//    };
+//
+//
+//public:
+//    static const size_t max_item_size   = IS;
+//    static const size_t max_item_count  = IC;
+//    static const size_t cache_alignment = A;
+//    static const size_t pool_size       = IC * sizeof(pool_buffer);
+//
+//    growing_memory_pool()
+//    {
+//        printf("_SC_LEVEL1_ICACHE_LINESIZE %lu\n",sysconf(_SC_LEVEL1_ICACHE_LINESIZE));
+//        printf("_SC_LEVEL1_DCACHE_LINESIZE %lu\n",sysconf(_SC_LEVEL1_DCACHE_LINESIZE));
+//        printf("_SC_LEVEL2_CACHE_LINESIZE  %lu\n",sysconf(_SC_LEVEL2_CACHE_LINESIZE));
+//        printf("_SC_LEVEL3_CACHE_LINESIZE  %lu\n",sysconf(_SC_LEVEL3_CACHE_LINESIZE));
+//        printf("_SC_LEVEL4_CACHE_LINESIZE  %lu\n",sysconf(_SC_LEVEL4_CACHE_LINESIZE));
+//        printf("_SC_READER_WRITER_LOCKS    %lu\n",sysconf(_SC_READER_WRITER_LOCKS));
+//        printf("_SC_CLOCK_SELECTION        %lu\n",sysconf(_SC_CLOCK_SELECTION));
+//
+////
+//
+//// pthread_condattr_t attr;
+//// __clockid_t clock_id;
+//// int ret;
+//
+//// ret = pthread_condattr_getclock(&attr &clock_id);
+//
+//        char data[1000];
+//        confstr(_CS_GNU_LIBC_VERSION,data,sizeof(data));
+//        printf("_CS_GNU_LIBC_VERSION %s\n",data);
+//
+//        confstr(_CS_GNU_LIBPTHREAD_VERSION,data,sizeof(data));
+//        printf("_CS_GNU_LIBPTHREAD_VERSION %s\n",data);
+//
+//        confstr(_CS_PATH,data,sizeof(data));
+//        printf("_CS_PATH %s\n",data);
+//
+//        confstr(_CS_POSIX_V7_LP64_OFF64_CFLAGS,data,sizeof(data));
+//        printf("_CS_POSIX_V7_LP64_OFF64_CFLAGS %s\n",data);
+//
+//        confstr(_CS_V7_ENV,data,sizeof(data));
+//        printf("_CS_V7_ENV %s\n",data);
+//
+//
+//
+//        size_t g = (sysconf(_SC_PAGESIZE)/sizeof(pool_buffer)   );
+//
+//        printf("%16lx  %lu\n",pool_size,g);
+//
+//
+//
+//        void* pmem = mmap(0,g*100,PROT_READ|PROT_WRITE, MAP_ANON|MAP_SHARED,-1,0);
+//
+//        printf("%16p\n",pmem);
+//    }
+//
+//
+//    void release(void* buffer)
+//    {
+//        static_memory_pool<IS,IC,A>::release(buffer);
+//    }
+//
+//
+//    void* acquire()
+//    {
+//        return static_memory_pool<IS,IC,A>::acquire();
+//    }
+//
+//};
+//
+//
+//void grow_test()
+//{
+//    growing_memory_pool<128,10000> d;
+//
+//}
 
 
 
@@ -597,7 +598,7 @@ struct ThreadpoolTest
 
 
 
-static constexpr size_t threads = 8;
+static const size_t threads = 8;
 
 TP p(threads);
 
@@ -625,7 +626,7 @@ RC FunctionTests()
 
     // Scalar Types
     //
-    CRR( p.Async( &target, &ThreadpoolTest::ScalarTypes, 1, 11.1, 1000000000000000ul ) );
+    CRR( p.Async( &target, &ThreadpoolTest::ScalarTypes, 1, 11.1, size_t(1000000000000000ul) ) );
 
     // Factorial Work Product
     //
