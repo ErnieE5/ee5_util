@@ -128,16 +128,13 @@ size_t time_it( std::function<void()> f )
     return start.delta();
 }
 
-struct thread_id
+size_t gettid()
 {
     static std::atomic_size_t a;
-    size_t id;
-
-    thread_id() { id = a++; }
-    size_t operator()() const { return id; }
-    operator size_t()   const { return id; }
-};
-std::atomic_size_t thread_id::a;
+    static thread_local size_t id = 0;
+    if (!id) { id = a++; }
+    return id;
+}
 
 template<typename L>
 stats lock_test(i_marshal_work* p,size_t iterations,size_t inner)
@@ -184,11 +181,9 @@ stats lock_test(i_marshal_work* p,size_t iterations,size_t inner)
 
                 mode_work_data[fact_time]++;
 
-                thread_local static thread_id tid;
-
                 fa += fact_time;
                 c++;
-                f[tid]++;
+                f[gettid()]++;
                 d += ttf;
 
                 mmf = std::minmax( std::initializer_list<size_t>({ mmf.first, mmf.second, fact_time }) );

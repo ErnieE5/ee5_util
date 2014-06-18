@@ -129,10 +129,10 @@ namespace ee5
 //
 class spin_flag
 {
-    std::atomic_flag barrier = ATOMIC_FLAG_INIT;
+    std::atomic_flag barrier;
 
 public:
-    spin_flag() { }
+    spin_flag() { barrier.clear(); }
     spin_flag(const spin_flag&) = delete;
 
     void lock()
@@ -235,7 +235,7 @@ class spin_mutex
     static const std::memory_order relaxed = std::memory_order_relaxed;
     static const std::memory_order acquire = std::memory_order_acquire;
 
-    alignas(64) std::atomic_bool barrier;
+    std::atomic_bool barrier;
 
 public:
     spin_mutex(const spin_mutex&) = delete;
@@ -374,7 +374,7 @@ private:
     static_assert( (mask_shared > max_shared),                              "At least a single overflow bit is needed." );
     static_assert( (mask_shared & mask_exclusive) == 0,                     "No overlap of shared and exclusive bits allowed!" );
 
-    alignas(64) barrier_t  barrier;
+    barrier_t  barrier;
 
 public:
     spin_reader_writer_lock(const spin_reader_writer_lock&) = delete;
