@@ -50,7 +50,6 @@ private:
         >::type value_type;
     };
 
-
     template< typename B, typename M, typename ...TArgs >
     RC __enqueue(B&& binder,TArgs&&...args)
     {
@@ -107,15 +106,27 @@ public:
         return __enqueue<binder_t,method_t>( binder_t(pO,pM), args... );
     }
 
+    template<typename T>
+    struct VoidVoid : public i_marshaled_call
+    {
+        T func;
+        VoidVoid(T f) :func(f) {}
+        virtual void Execute()
+        {
+            func();
+        }
+    };
+
+
     // Call any function or functor that can compile to a void(void) signature
     //
     template<typename TFunction>
     RC Async( TFunction f )
     {
-        using binder_t = std::function< void() >;
-        using method_t = marshaled_call< std::function< void() > >;
+        using binder_t = VoidVoid<TFunction>;//std::function< void() >;
+        //using method_t = marshaled_call< binder_t >;
 
-        return __enqueue<binder_t,method_t>( f );
+        return __enqueue<TFunction, binder_t>( std::move(f) );
     }
 
 
@@ -148,6 +159,7 @@ public:
     >
     RC Async(TFunction f,TArg1 a,TArgs&&...args)
     {
+        // decltype( std::bind( std::declval<TFunction>(), std::declval<TArg1>(), std::declval<TArgs>()... ) );
         using binder_t = std::function<void(TArg1,typename ref_val<TArgs>::value_type...)>;
         using method_t = marshaled_call<binder_t,TArg1,typename std::remove_reference<TArgs>::type...>;
 

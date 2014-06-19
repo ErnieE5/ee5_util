@@ -118,7 +118,8 @@ void sort(T& c,Comp...comp)
     std::sort(c.begin(),c.end(),comp...);
 }
 
-size_t time_it( std::function<void()> f )
+template<typename T>
+size_t time_it( T f )
 {
     us_stopwatch_s start;
     f();
@@ -183,7 +184,7 @@ stats lock_test(i_marshal_work* p,size_t iterations,size_t inner)
 
             if(dd != s_ok())
             {
-                tp_park(1000);
+//                tp_park(1000);
             }
         }
         while( dd != s_ok() );
@@ -237,7 +238,7 @@ stats lock_test(i_marshal_work* p,size_t iterations,size_t inner)
 void tst_spin_locks()
 {
     size_t concurrency  = std::thread::hardware_concurrency();
-    size_t iterations   = 100000000;
+    size_t iterations = 10000000;// 0;
     size_t work_loop    = 200;
 
     tp_start(concurrency);
