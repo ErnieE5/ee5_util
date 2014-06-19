@@ -137,7 +137,6 @@ stats lock_test(i_marshal_work* p,size_t iterations,size_t inner)
 
     using un_map = std::unordered_map<size_t,size_t>;
 
-    std::atomic_size_t       a;
     m_stopwatch_f            sw;
 
     L                        lock;
@@ -244,22 +243,18 @@ void tst_spin_locks()
     tp_start(concurrency);
 
     
+    std::array<std::function<stats()>,5> tests;
 
-    size_t x = 0;
+    tests[0] = std::bind( lock_test<std::mutex>,          pool, iterations, work_loop );
+    tests[1] = std::bind( lock_test<spin_native>,         pool, iterations, work_loop );
+    tests[2] = std::bind( lock_test<spin_mutex>,          pool, iterations, work_loop );
+    tests[3] = std::bind( lock_test<spin_flag>,           pool, iterations, work_loop );
+    tests[4] = std::bind( lock_test<spin_shared_mutex_t>, pool, iterations, work_loop );
 
-    // tests[x++] = std::bind( lock_test<std::mutex>,          pool, iterations, work_loop );
-    // tests[x++] = std::bind( lock_test<spin_native>,         pool, iterations, work_loop );
-    // tests[x++] = std::bind( lock_test<spin_mutex>,          pool, iterations, work_loop );
-    // tests[x++] = std::bind( lock_test<spin_barrier>,        pool, iterations, work_loop );
-    // tests[x++] = std::bind( lock_test<spin_shared_mutex_t>, pool, iterations, work_loop );
-
-    // std::random_shuffle( tests.begin(), tests.end() );
+    std::random_shuffle( tests.begin(), tests.end() );
 
     using vs_t = std::vector<stats>;
     vs_t data;
-
-    std::array<std::function<stats()>,5> tests;
-    data.push_back( lock_test<spin_flag>(pool, iterations, work_loop) );
 
     for(auto& r : tests)
     {
