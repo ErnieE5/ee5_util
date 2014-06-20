@@ -171,7 +171,7 @@ public:
 
     void Start(size_t t = std::thread::hardware_concurrency())
     {
-        std::srand(std::time(0));
+        std::srand( static_cast<unsigned int>( std::time(0) ) );
 
         t_count = t;
 
@@ -269,7 +269,7 @@ struct ThreadpoolTest
     }
 
 
-    static long double Factorial(unsigned long n,long double a = 1)
+    static long double Factorial(size_t n,long double a = 1)
     {
         if( n == 0 ) return a;
         return Factorial(n-1, a * n );
@@ -282,11 +282,11 @@ struct ThreadpoolTest
     {
         us_stopwatch_d taft;
 
-        for(unsigned long h = n;h > 2;h--)
+        for(size_t h = n;h > 2;h--)
         {
-            tp.Async( [&](unsigned long h)
+            tp.Async( [&](size_t h)
             {
-                long double v = Factorial(h);
+                long double v = Factorial( h );
                 framed_lock( lock, [&] { total+=v; } );
             }, h );
         }
@@ -435,7 +435,7 @@ RC FunctionTests()
     // Lambda capture with three scalar arguments called locally
     // and queued later,
     //
-    auto q = [&cc](int a,double b, int c)
+    auto q = [&cc](size_t a,double b)
     {
         long double ld = std::rand() * b;
 
@@ -468,7 +468,7 @@ RC FunctionTests()
         LOG_UNAME("Lambda [h](int a,double b, int c)", "[h]:%i a:%i b:%g c:%i", h, a, b, c );
     }, 1 ,1.1, 1 ) );
 
-    CRR( p.Async( q, 2, 2.2, 2 ) );
+    CRR( p.Async( q, 2, 2.2 ) );
 
 
     LOG_ALWAYS("Starting...","");
@@ -476,14 +476,14 @@ RC FunctionTests()
     ms_stopwatch_f t1a;
     for(size_t g = 0;g < 2525252; g++)
     {
-        CRR( p.Async( q, 3, g*.3, g ) );
+        CRR( p.Async( q, 3, g*.3 ) );
     }
     LOG_ALWAYS("Phase One Complete... %5.3lf ms",t1a.delta<std::milli>());
 
     ms_stopwatch_f t2a;
     for(size_t g = 0;g < 5252524; g++)
     {
-        CRR( p.Async( q, 4, g*.4, g ) );
+        CRR( p.Async( q, 4, g*.4 ) );
     }
     LOG_ALWAYS("Phase Two Complete... %5.3lf ms",t2a.delta<std::milli>());
 

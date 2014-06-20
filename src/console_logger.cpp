@@ -29,8 +29,13 @@ ConsoleLogger::thread_ptr ConsoleLogger::pThread;
 //
 RC cb_vsnprintf(size_t c,char* p,size_t* pc,char** ppP,const char* fmt,va_list v)
 {
+#ifdef _MSC_VER
+#pragma warning(disable: 4996)
+#endif
     int i = std::vsnprintf(p,c,fmt,v);
-
+#ifdef _MSC_VER
+#pragma warning(default: 4996)
+#endif
     if( i < 0 || static_cast<size_t>(i) > c )
     {
         return e_overflow();

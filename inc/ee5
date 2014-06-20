@@ -14,9 +14,6 @@
 //
 #pragma once
 
-#ifdef _MSC_VER
-#define thread_local __declspec(thread)
-#endif
 
 #define BNS(n) namespace n {
 #define ENS(n) }

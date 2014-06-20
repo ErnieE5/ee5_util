@@ -17,6 +17,13 @@
 
 BNS( ee5 )
 
+//
+// TODO: MSVC respects the thread_local keyword, but doesn't implement it!!!!
+//
+#ifdef _MSC_VER
+#define thread_local __declspec(thread)
+#endif
+
 static size_t thread_local the_thread_id;
 
 

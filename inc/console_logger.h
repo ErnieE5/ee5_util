@@ -122,8 +122,16 @@ private:
         time_point      now_s   = sys_t::from_time_t(now);
         hrc_t::duration d       = pLL->time - now_s;
 
+#ifdef _MSC_VER
+#pragma warning(disable: 4996)
+#endif
         char buf[100];
         std::strftime(buf, sizeof(buf), "%Y-%m-%dT%H:%M:%S", std::gmtime(&now));
+#ifdef _MSC_VER
+#pragma warning(default: 4996)
+#endif
+
+
 
 #ifdef _MSC_VER
         auto  fraction  = c::duration_cast<milli>(d).count();
