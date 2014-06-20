@@ -23,29 +23,9 @@
 #include <cstring>
 #include <iostream>
 
-
-
 using namespace ee5;
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 #include "i_marshal_work.h"
-
-
 
 template <class T,typename H = void>
 struct pool_allocator
@@ -354,10 +334,10 @@ int main()
     {
         LOG_ALWAYS("Good day!", "");
 
-        //void tst_spin_locks();
-        //tst_spin_locks();
-        void tst_atomic_queue();
-        tst_atomic_queue();
+        void tst_spin_locks();
+        tst_spin_locks();
+        //void tst_atomic_queue();
+        //tst_atomic_queue();
 
         LOG_ALWAYS("Goodbye...", "");
 
