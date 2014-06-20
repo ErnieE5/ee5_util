@@ -12,13 +12,15 @@
 // ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
 // OTHER DEALINGS IN THE SOFTWARE.
 //
-
-#ifndef ATOMIC_QUEUE_H_
-#define ATOMIC_QUEUE_H_
+#pragma once
 
 #include <atomic>
 #include <cassert>
 
+#define BNS(n) namespace n {
+#define ENS(n) }
+
+BNS( ee5 )
 //-------------------------------------------------------------------------------------------------
 // atomic_queue
 //
@@ -54,31 +56,50 @@ private:
     // enumerations causes massively long lines.
     //
     static const std::memory_order release = std::memory_order_release;
+    static const std::memory_order acquire = std::memory_order_acquire;
     static const std::memory_order relaxed = std::memory_order_relaxed;
+
+    static const T* stall_marker;
 
     std::atomic<T*> head; // Atomic storage for items ready for de-queue.
     std::atomic<T*> tail; // Atomic storage for items at the tail of the queue
 
     T* swap()
     {
+        T* ret = tail;
 
-        return nullptr;
+        if( ret != nullptr )
+        {
+            while( !tail.compare_exchange_weak( ret, nullptr, acquire, relaxed ) );
+
+            T* _top = null;
+
+            while( ret != nullptr )
+            {
+                T* item = ret->next;
+                ret->next = _top;
+                _top = ret;
+                ret = item;
+            }
+        }
+
+        return ret;
     }
 
 
 public:
     // 
     //
-    void enqueue(T* item)
+    void enqueue( T* item )
     {
-        assert(item != nullptr);
+        assert( item != nullptr );
 
         // There is a version of this routine that can save a local
         // on the stack. However, it was noted that some compilers
         // had issues with the ordering of the operations as of 2014
         // this is still likely a marginally more portable approach.
         //
-        T* prior_tail = tail.load(relaxed);
+        T* prior_tail = tail.load( relaxed );
 
         do
         {
@@ -87,11 +108,12 @@ public:
             // at the point of the exchange below.
             //
             item->next = prior_tail;
-        } while (!tail.compare_exchange_weak(prior_tail, item, release, relaxed));
+        }
+        while( !tail.compare_exchange_weak( prior_tail, item, release, relaxed ) );
         //                                   |
-        //                      if top STILL == prior_tail then item is placed in top
+        //                      if top STILL == prior_tail then item is placed in tail
         //                      and true is returned otherwise
-        //                      the new value of top replaces prior_top and false is
+        //                      the new value of tail replaces prior_tail and false is
         //                      returned.
         //
     }
@@ -100,11 +122,11 @@ public:
     //
     T* dequeu()
     {
-        T* ret = head.load(relaxed);
+        T* ret = head.load( relaxed );
 
-        while ( ret != nullptr && !top.compare_exchange_weak(ret, ret->next, release, relaxed) );
+        while( ret != nullptr && !head.compare_exchange_weak( ret, ret->next, release, relaxed ) );
 
-        if ( !ret )
+        if( !ret )
         {
             ret = swap();
         }
@@ -113,7 +135,9 @@ public:
     }
 };
 
+template<typename T>
+T* atomic_queue<T>::stall_marker = reinterpret_cast<const T*>( -1 );
 
-#endif // ATOMIC_QUEUE_H_
+ENS( ee5 )
 
 

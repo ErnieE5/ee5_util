@@ -354,8 +354,10 @@ int main()
     {
         LOG_ALWAYS("Good day!", "");
 
-        void tst_spin_locks();
-        tst_spin_locks();
+        //void tst_spin_locks();
+        //tst_spin_locks();
+        void tst_atomic_queue();
+        tst_atomic_queue();
 
         LOG_ALWAYS("Goodbye...", "");
 

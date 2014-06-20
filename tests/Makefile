@@ -4,6 +4,7 @@ COMPILER=clang++
 
 TESTS:=\
     command_line\
+    atomic_queue\
     atomic_stack\
     delegate\
     spin_locks\

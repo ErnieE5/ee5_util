@@ -19,6 +19,8 @@
 #include <atomic>
 #include <cassert>
 
+namespace ee5
+{
 //-------------------------------------------------------------------------------------------------
 // atomic_stack
 //
@@ -113,5 +115,5 @@ public:
     }
 };
 
-
+}
 #endif // ATOMIC_STACK_H_
