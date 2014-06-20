@@ -11,14 +11,12 @@
 // OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 // ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
 // OTHER DEALINGS IN THE SOFTWARE.
-// 
+//
+#pragma once
+#include <ee5>
 
-#ifndef I_MARSHALED_CALL_H_
-#define I_MARSHALED_CALL_H_
 
-
-namespace ee5
-{
+BNS( ee5 )
 
 //-------------------------------------------------------------------------------------------------
 // This is an "interface" class. That allows pretty much anything that implements the Execute
@@ -34,6 +32,4 @@ struct i_marshaled_call
 
 
 
-}       // namespace ee5
-#endif  // I_MARSHALED_CALL_H_
-
+ENS( ee5 )

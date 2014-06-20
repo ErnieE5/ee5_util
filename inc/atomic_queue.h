@@ -13,12 +13,10 @@
 // OTHER DEALINGS IN THE SOFTWARE.
 //
 #pragma once
+#include <ee5>
 
 #include <atomic>
 #include <cassert>
-
-#define BNS(n) namespace n {
-#define ENS(n) }
 
 BNS( ee5 )
 //-------------------------------------------------------------------------------------------------
@@ -72,7 +70,7 @@ private:
         {
             while( !tail.compare_exchange_weak( ret, nullptr, acquire, relaxed ) );
 
-            T* _top = null;
+            T* _top = nullptr;
 
             while( ret != nullptr )
             {
@@ -88,7 +86,7 @@ private:
 
 
 public:
-    // 
+    //
     //
     void enqueue( T* item )
     {
@@ -118,7 +116,7 @@ public:
         //
     }
 
-    // 
+    //
     //
     T* dequeu()
     {
@@ -136,8 +134,6 @@ public:
 };
 
 template<typename T>
-T* atomic_queue<T>::stall_marker = reinterpret_cast<const T*>( -1 );
+const T* atomic_queue<T>::stall_marker = reinterpret_cast<const T*>( -1 );
 
 ENS( ee5 )
-
-

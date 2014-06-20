@@ -12,7 +12,15 @@
 // ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
 // OTHER DEALINGS IN THE SOFTWARE.
 //
+#pragma once
+#include <ee5>
 
+#include <cassert>
+#include <cstddef>
+#include <atomic>
+#include <thread> // TODO: currently needed for spin_posix
+
+BNS( ee5 )
 //-------------------------------------------------------------------------------------------------
 // spinning locks
 //
@@ -100,29 +108,16 @@
 //
 
 
-
-#ifndef EE5_SPIN_LOCKING_H_
-#define EE5_SPIN_LOCKING_H_
-
-#include <cassert>
-#include <cstddef>
-#include <atomic>
-#include <thread> // TODO: currently needed for spin_posix
-
-#include <stdio.h>
-
-namespace ee5
-{
 //-------------------------------------------------------------------------------------------------
 // spin_flag
 //
 //  The spin_flag is an exclusive lock that uses the atomic flag as the core locking method to
 //  implement the barrier. Sometimes this can be faster because it is possible to save a reload
-//  of the expected value. 
+//  of the expected value.
 //
 //  **Important** Note:
-//  The data sizeof this element is a single byte on an intel platform. This is "cheap" for 
-//  memory, but be EXTRA careful that the data that is packed NEAR the storage of this 
+//  The data sizeof this element is a single byte on an intel platform. This is "cheap" for
+//  memory, but be EXTRA careful that the data that is packed NEAR the storage of this
 //  lock doesn't contain ANOTHER spin that can cuase REALLY weird deadlocks.
 //
 //  C++ concept: BasicLockable
@@ -459,10 +454,4 @@ public:
 using spin_shared_mutex_t = spin_reader_writer_lock<>;
 
 
-
-}       // namespace ee5
-#endif  // EE5_SPIN_LOCKING_H_
-
-
-
-
+ENS( ee5 )

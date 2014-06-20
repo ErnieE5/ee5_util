@@ -12,15 +12,14 @@
 // ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
 // OTHER DEALINGS IN THE SOFTWARE.
 //
-
-#ifndef ERROR_HANDLING_H_
-#define ERROR_HANDLING_H_
+#pragma once
+#include <ee5>
 
 #include <cstddef>
 #include <stdint.h>
 
-namespace ee5
-{
+
+BNS( ee5 )
 
 typedef int_fast64_t 	result_code_t;
 typedef result_code_t   rc_t;
@@ -37,10 +36,6 @@ typedef result_code_t   rc_t;
 #define CMA( x )        do { if ( (x) == nullptr ) { return e_out_of_memory();     } } while(0)
 #define CRR( x )        do { rc_t r=(x); if (r<0 ) { return r;                     } } while(0)
 
-
-
-}       // namespace oakt
-
 typedef ee5::result_code_t RC;
 
-#endif  // ERROR_HANDLING_H_
+ENS( ee5 )

@@ -1,7 +1,7 @@
 //-------------------------------------------------------------------------------------------------
 // Copyright (C) 2014 Ernest R. Ewert
-// 
-// Feel free to use this as you see fit. 
+//
+// Feel free to use this as you see fit.
 // I ask that you keep my name with the code.
 //
 // THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
@@ -15,8 +15,8 @@
 //
 // This header contains delegate template helpers.
 //
-#ifndef EE5_DELEGATE_H_
-#define EE5_DELEGATE_H_
+#pragma once
+#include <ee5>
 
 #include <cstddef>
 #include <tuple>
@@ -24,8 +24,7 @@
 
 #include <i_marshaled_call.h>
 
-namespace ee5
-{
+BNS( ee5 )
 
 //-------------------------------------------------------------------------------------------------
 // This template binds a pointer to an object + a pointer to a member function within the
@@ -77,8 +76,8 @@ public:
 // function operator().  Depending on how this template is constructed, the method will be invoked
 // with the arguments supplied.
 //
-// This template ASSUMES copy semantics. The INTENTION of the class is to marshal data from the 
-// point of construction to where it ultimately is in a context ready for execution. 
+// This template ASSUMES copy semantics. The INTENTION of the class is to marshal data from the
+// point of construction to where it ultimately is in a context ready for execution.
 // The design is intended for threading, specifically for adding worker items to a
 // thread pool.  The examples show the idea.  If you are using these objects outside the thread
 // system you need to know this, otherwise most of the "goodness" happens under the covers.
@@ -93,7 +92,7 @@ public:
 // already know this anyway right?)
 //
 // std::bind is very close to this idea. I may switch, but I have have used T*, and T::*pmf in that
-// order for going on 19 years at this point. I understand WHY the STL flipped it, but it is hard to 
+// order for going on 19 years at this point. I understand WHY the STL flipped it, but it is hard to
 // adjust right now...
 //
 //
@@ -153,10 +152,10 @@ private:
     {
         typedef sequence<S...> type;
     };
-   
+
     using storage_t = std::tuple<typename std::remove_reference<TArgs>::type...>;
     using unpack_t  = typename unpacker<argument_count>::type;
-    
+
     TFunction   method;
     storage_t   values;
 
@@ -165,14 +164,14 @@ private:
     {
         return method( std::get<S>(values)... );
     }
-    
+
 
 public:
     marshal_delegate(TFunction f,TArgs&&...args ) :
         method( f ), values( std::forward<TArgs>(args)... )
     {
     }
-        
+
     marshal_delegate(TFunction f,const TArgs&...args ) :
         method( f ), values( args... )
     {
@@ -182,7 +181,7 @@ public:
         method(_o.method), values(_o.values)
     {
     }
-    
+
     inline TReturn operator()()
     {
         return tuple_call( unpack_t() );
@@ -261,6 +260,4 @@ public:
     }
 };
 
-
-}       // namespace ee5
-#endif  // EE5_DELEGATE_H_
+ENS( ee5 )

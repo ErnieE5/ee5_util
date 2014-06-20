@@ -12,23 +12,13 @@
 // ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
 // OTHER DEALINGS IN THE SOFTWARE.
 //
-#include "threadpool.h"
-#include <cstddef>
+#pragma once
 
-BNS( ee5 )
+#ifdef _MSC_VER
+#define thread_local __declspec(thread)
+#endif
 
-static size_t thread_local the_thread_id;
+#define BNS(n) namespace n {
+#define ENS(n) }
 
 
-//__attribute__ ((visibility ("external")))
-size_t  work_thread_id()
-{
-    return the_thread_id;
-}
-
-void set_id(size_t i)
-{
-	the_thread_id = i;
-}
-
-ENS( ee5 )

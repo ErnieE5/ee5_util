@@ -12,9 +12,8 @@
 // ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
 // OTHER DEALINGS IN THE SOFTWARE.
 //
-
-#ifndef STATIC_MEMORY_POOL_H_
-#define STATIC_MEMORY_POOL_H_
+#pragma once
+#include <ee5>
 
 #include <atomic_stack.h>
 
@@ -22,8 +21,7 @@
 #include <array>
 #include <cstring>
 
-namespace ee5
-{
+BNS( ee5 )
 
 const int cache_alignment_intel_x86_64 = 64;
 
@@ -315,6 +313,4 @@ public:
     }
 };
 
-
-}       // namespace ee5
-#endif  // STATIC_MEMORY_POOL_H_
+ENS( ee5 )

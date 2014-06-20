@@ -12,16 +12,14 @@
 // ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
 // OTHER DEALINGS IN THE SOFTWARE.
 //
-
-#ifndef I_MARSHALL_WORK_H_
-#define I_MARSHALL_WORK_H_
+#pragma once
+#include <ee5>
 
 #include <error.h>
 #include <i_marshaled_call.h>
 #include <delegate.h>
 
-namespace ee5
-{
+BNS( ee5 )
 //---------------------------------------------------------------------------------------------------------------------
 // i_marshal_work
 //
@@ -169,8 +167,4 @@ public:
 };
 
 
-
-
-
-}       // namespace ee5
-#endif  // I_MARSHALL_WORK_H_
+ENS( ee5 )

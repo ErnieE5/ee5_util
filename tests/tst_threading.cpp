@@ -281,7 +281,6 @@ struct ThreadpoolTest
     void CalcFactorial(size_t n)
     {
         us_stopwatch_d taft;
-        long double f = Factorial(n);
 
         for(unsigned long h = n;h > 2;h--)
         {
@@ -338,7 +337,7 @@ RC FunctionTests()
     // LOG_ALWAYS("%s","testing...");
 
     ThreadpoolTest  target;
-    int             int_local       = 55555;
+//    int             int_local       = 55555;
     double          double_local    = 55.555;
 
     TP& p = tp;

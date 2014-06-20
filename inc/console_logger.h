@@ -12,9 +12,8 @@
 // ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
 // OTHER DEALINGS IN THE SOFTWARE.
 //
-
-#ifndef LOGGING_H_
-#define LOGGING_H_
+#pragma once
+#include <ee5>
 
 #include <error.h>
 #include <logging.h>
@@ -31,11 +30,7 @@
 #include <thread>
 #include <cstdio>
 
-
-namespace ee5
-{
-
-
+BNS( ee5 )
 
 //---------------------------------------------------------------------------------------------------------------------
 //
@@ -117,10 +112,10 @@ private:
 
     static void Doit(LogLinePtr& pLL)
     {
-        // Convert the HRC time captured to time_t system clock representation 
-        // then, convert it back. This will give use a value without the 
+        // Convert the HRC time captured to time_t system clock representation
+        // then, convert it back. This will give use a value without the
         // micro/milliseconds as the system clock truncates the value to seconds.
-        // The duration between the two is the fractional part which gets 
+        // The duration between the two is the fractional part which gets
         // converted to the millisecond or microsecond value for the time stamp.
         //
         time_t          now     = hrc_t::to_time_t(pLL->time);
@@ -168,5 +163,4 @@ public:
 
 
 
-}       // namespace ee5
-#endif  // LOGGING_H_
+ENS( ee5 )

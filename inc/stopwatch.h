@@ -12,33 +12,31 @@
 // ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
 // OTHER DEALINGS IN THE SOFTWARE.
 //
-
-#ifndef EE5_STOPWATCH_H_
-#define EE5_STOPWATCH_H_
+#pragma once
+#include <ee5>
 
 #include <chrono>
 #include <functional>
+
+BNS( ee5 )
 
 //-------------------------------------------------------------------------------------------------
 // The C++11 chrono namespace is very complete, but tends to be highly verbose to use.
 //
 //  This header has a few useful declarations to help make things considerably simpler (IMO) for
-//  creating timed sections of code. 
+//  creating timed sections of code.
 //
 #if 0
 void stopwatch_example()
 {
     us_stopwatch_s sw; // Microseconds with a default size_t value from delta()
-    
+
     // Do some interesting stuff...
-    
+
     printf("\nfinal %3lu\n",sw.delta());
 }
-#endif    
+#endif
 
-
-namespace ee5
-{
 
 //-------------------------------------------------------------------------------------------------
 // stopwatch_base<>
@@ -85,7 +83,7 @@ public:
     {
         start = C::now(); // Capture the timer value
     }
-    
+
     template<typename DP = period,typename DT = value_type >
     DT delta()
     {
@@ -107,17 +105,17 @@ public:
         //     microseconds and the type is unsigned with a period of seconds, the
         //     values returned would be the unsigned number of seconds elapsed.
     }
-    
+
     value_type operator()()
     {
         return delta();
     }
-    
+
     typename C::duration duration()
     {
         return C::now() - start;
     }
-    
+
 };
 
 // The following declarations help simplify getting the time presented in
@@ -170,6 +168,5 @@ using h_stopwatch_f     = h_stopwatch<float>;   // %.0f
 using h_stopwatch_d     = h_stopwatch<double>;  // %.0lf
 using h_stopwatch_s     = h_stopwatch<size_t>;  // printf("%lu",   t.delta() );
 
-}       // namespace ee5
-#endif  // EE5_STOPWATCH_H_
+ENS( ee5 )
 

@@ -12,9 +12,8 @@
 // ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
 // OTHER DEALINGS IN THE SOFTWARE.
 //
-
-#ifndef EE5_LOGGING_H_
-#define EE5_LOGGING_H_
+#pragma once
+#include <ee5>
 
 #include "stopwatch.h"
 
@@ -23,8 +22,7 @@
 #include <cstdlib>
 
 
-namespace ee5
-{
+BNS( ee5 )
 
 #define LOG_FACILITY "KaZa"
 
@@ -93,5 +91,4 @@ extern program_log __ee5_log;
 #define LOG_ALWAYS(                 fmt,...) _TRACE(fmt,__VA_ARGS__)
 #define LOG_DEBUG(  zone,           fmt,...)
 
-}       // namespace ee5
-#endif  // ee5_LOGGING_H_
+ENS( ee5 )

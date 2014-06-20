@@ -12,15 +12,13 @@
 // ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
 // OTHER DEALINGS IN THE SOFTWARE.
 //
-
-#ifndef ATOMIC_STACK_H_
-#define ATOMIC_STACK_H_
+#pragma once
+#include <ee5>
 
 #include <atomic>
 #include <cassert>
 
-namespace ee5
-{
+BNS( ee5 )
 //-------------------------------------------------------------------------------------------------
 // atomic_stack
 //
@@ -115,5 +113,4 @@ public:
     }
 };
 
-}
-#endif // ATOMIC_STACK_H_
+ENS( ee5 )

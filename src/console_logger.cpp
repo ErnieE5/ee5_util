@@ -16,8 +16,7 @@
 #include "workthread.h"
 #include <cstdarg>
 
-namespace ee5
-{
+BNS( ee5 )
 
 const size_t LogLine::msg_offset = offsetof(LogLine,msg);
 
@@ -80,4 +79,4 @@ void ConsoleLogger::console_log(const __info* i,...)
 
 
 
-}
+ENS( ee5 )

@@ -1,7 +1,7 @@
 //-------------------------------------------------------------------------------------------------
 // Copyright (C) 2014 Ernest R. Ewert
-// 
-// Feel free to use this as you see fit. 
+//
+// Feel free to use this as you see fit.
 // I ask that you keep my name with the code.
 //
 // THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
@@ -13,14 +13,14 @@
 // OTHER DEALINGS IN THE SOFTWARE.
 //
 
+
 #include "system.h"
 #include "console_logger.h"
 
 
 #include <atomic>
 
-namespace ee5
-{
+BNS( ee5 )
 
 program_log __ee5_log = nullptr;
 
@@ -56,4 +56,5 @@ void Shutdown()
 }
 
 
-}
+ENS( ee5 )
+

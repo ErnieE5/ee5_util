@@ -12,9 +12,8 @@
 // ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
 // OTHER DEALINGS IN THE SOFTWARE.
 //
-
-#ifndef EE5_WORKTHREAD_H_
-#define EE5_WORKTHREAD_H_
+#pragma once
+#include <ee5>
 
 #include <delegate.h>
 #include <spin_locking.h>
@@ -28,12 +27,7 @@
 #include <cassert>
 #include <array>
 
-
-
-namespace ee5
-{
-
-
+BNS( ee5 )
 
 //---------------------------------------------------------------------------------------------------------------------
 //
@@ -282,6 +276,4 @@ public:
 };
 
 
-
-}       // namespace ee5
-#endif  // EE5_WORKTHREAD_H_
+ENS( ee5 )
