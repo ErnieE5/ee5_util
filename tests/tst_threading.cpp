@@ -76,7 +76,7 @@ private:
     };
 
     using qitem_t       = std::unique_ptr<i_marshaled_call,deleter>;
-    using work_thread_t = ee5::WorkThread<qitem_t>;
+    using work_thread_t = WorkThread<qitem_t>;
     using tvec_t        = std::vector<work_thread_t>;
 
     spin_shared_mutex_t active;
@@ -487,10 +487,7 @@ RC FunctionTests()
     }
     LOG_ALWAYS("Phase Two Complete... %5.3lf ms",t2a.delta<std::milli>());
 
-#ifdef _MSC_VER
-#define alignas(x) __declspec(align(x))
-#endif
-    alignas(128) spin_flag lock;
+    ee5_alignas( 128 ) spin_flag lock;
 
     std::list<size_t>   complete;
     auto join = [&lock,&complete](std::vector<int> add)

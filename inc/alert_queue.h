@@ -15,12 +15,12 @@
 #pragma once
 #include <ee5>
 
-#include <atomic>
 #include <cassert>
+#include <spin_locking.h>
 
 BNS( ee5 )
 //-------------------------------------------------------------------------------------------------
-// atomic_queue
+// alert_queue
 //
 //  This is a simple template that manages a lock free queue based on more portable C++ 11 atomic
 //  operations library. Use this template when the data structure contains a member value that
@@ -32,108 +32,92 @@ BNS( ee5 )
 //  case it mostly means that the linked list pointers are in a uniform location / offset within
 //  the structure.)
 //
-//  There are a gazillion more comments in this header than the code that is actually generated.
-//  In optimized builds the vast majority of this falls away.
-//
 //  The only current requirement is that the type T has a public ~data~ member named 'next.'
 //
-//  TODO: (FUTURE:?)
-//      Currently Clang is crashing if including self-referential declarations ~and~
-//      the type T has an anonymous union ~and~ the -g option is used during the build!
-//
-//      The changes are simple. Uncomment the template declaration below, and add a couple of
-//      asterisks in the item->*next calls.
-//                             ^
-//
-//template<typename T,T* T::* next = &T::next>
-template<typename T>
-class atomic_queue
+struct NullAlert
 {
-private:
-    // These are re declarations because the verbosity of the
-    // enumerations causes massively long lines.
-    //
-    static const std::memory_order release = std::memory_order_release;
-    static const std::memory_order acquire = std::memory_order_acquire;
-    static const std::memory_order relaxed = std::memory_order_relaxed;
-
-    static const T* stall_marker;
-
-    std::atomic<T*> head; // Atomic storage for items ready for de-queue.
-    std::atomic<T*> tail; // Atomic storage for items at the tail of the queue
-
-    T* swap()
+    void operator()()
     {
-        T* ret = tail;
-
-        if( ret != nullptr )
-        {
-            while( !tail.compare_exchange_weak( ret, nullptr, acquire, relaxed ) );
-
-            T* _top = nullptr;
-
-            while( ret != nullptr )
-            {
-                T* item = ret->next;
-                ret->next = _top;
-                _top = ret;
-                ret = item;
-            }
-        }
-
-        return ret;
-    }
-
-
-public:
-    //
-    //
-    void enqueue( T* item )
-    {
-        assert( item != nullptr );
-
-        // There is a version of this routine that can save a local
-        // on the stack. However, it was noted that some compilers
-        // had issues with the ordering of the operations as of 2014
-        // this is still likely a marginally more portable approach.
-        //
-        T* prior_tail = tail.load( relaxed );
-
-        do
-        {
-            // Set item->next to value stored in top and
-            // will hopefully ~still~ be the value in top
-            // at the point of the exchange below.
-            //
-            item->next = prior_tail;
-        }
-        while( !tail.compare_exchange_weak( prior_tail, item, release, relaxed ) );
-        //                                   |
-        //                      if top STILL == prior_tail then item is placed in tail
-        //                      and true is returned otherwise
-        //                      the new value of tail replaces prior_tail and false is
-        //                      returned.
-        //
-    }
-
-    //
-    //
-    T* dequeu()
-    {
-        T* ret = head.load( relaxed );
-
-        while( ret != nullptr && !head.compare_exchange_weak( ret, ret->next, release, relaxed ) );
-
-        if( !ret )
-        {
-            ret = swap();
-        }
-
-        return ret;
-    }
+    };
 };
 
-template<typename T>
-const T* atomic_queue<T>::stall_marker = reinterpret_cast<const T*>( -1 );
+
+template<typename T, typename A = NullAlert>
+class ee5_alignas( CACHE_ALIGN ) alert_queue
+{
+private:
+    // These member variables are all very likely to fit within a cache line. 
+    // A spin lock is used because any thread that needs to modify the queue
+    // will have to lock the data values anyway and the added complexity of 
+    // having separate locks would end up creating more stalls.
+    // 
+    spin_flag   data_lock;
+    T*          head;
+    T*          tail;
+    A           alert;
+
+public:
+    template<typename...TArgs>
+    alert_queue( TArgs...args ) : alert( args... )
+    {
+        head = nullptr;
+        tail = nullptr;
+    }
+
+    void enqueue( T* item )
+    {
+        // In an optimized build this becomes a very simple set of 
+        // assembly instructions. Thank goodness for optimizing compilers!
+        //
+        framed_lock( data_lock, [&]()
+        {
+            // If we have a tail, just add the new item to the end
+            //
+            if( tail )
+            {
+                tail->next = item;
+                tail = item;
+            }
+            else
+            {
+                assert( tail == nullptr && head == nullptr );
+
+                // Otherwise, the container better be empty
+                //
+                head = tail = item;
+            }
+        } );
+
+        // If an alert is requested, then signal it
+        // 
+        //  This is done outside of the lock, because we don't have any control over what the 
+        //  alert is. (It is recommended that it be something like an Event (Windows) or 
+        //  condition_variable (C++11).
+        // 
+        alert();
+    }
+
+    T* dequeue()
+    {
+        return framed_lock( data_lock, [&]()->T*
+        {
+            T* ret = nullptr;
+
+            if( head )
+            {
+                ret = head;
+                head = head->next;
+                if( !head )
+                {
+                    assert( tail == ret );
+                    tail = nullptr;
+                }
+            }
+
+            return ret;
+        } );
+    }
+
+};
 
 ENS( ee5 )

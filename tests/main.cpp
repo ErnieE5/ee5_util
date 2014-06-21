@@ -27,7 +27,7 @@ using namespace ee5;
 
 #include "i_marshal_work.h"
 
-template <class T,typename H = void>
+template <class T, typename H = void>
 struct pool_allocator
 {
     typedef T               value_type;
@@ -38,20 +38,23 @@ struct pool_allocator
     typedef std::size_t     size_type;
     typedef std::ptrdiff_t  difference_type;
 
-    template<typename O> struct rebind { typedef pool_allocator<O> other; };
+    template<typename O> struct rebind
+    {
+        typedef pool_allocator<O> other;
+    };
 
-    pool_allocator(/*ctor args*/)
+    pool_allocator(/*ctor args*/ )
     {
     };
 
-    pool_allocator(const pool_allocator&)
+    pool_allocator( const pool_allocator& )
     {
     };
 
     template< class O >
-    pool_allocator(const pool_allocator<O,H>& other)
+    pool_allocator( const pool_allocator<O, H>& other )
     {
-        int y =  sizeof(O);
+        int y = sizeof( O );
         y = 1;
     };
 
@@ -59,17 +62,17 @@ struct pool_allocator
     template< class A, class... Args >
     void construct( A* p, Args&&... args )
     {
-        ::new( reinterpret_cast<void*>(p) ) A(std::forward<Args>(args)...);
+        ::new( reinterpret_cast<void*>( p ) ) A( std::forward<Args>( args )... );
     }
 
-    T* allocate(size_type n,const_pointer hint = 0)
+    T* allocate( size_type n, const_pointer hint = 0 )
     {
-//        size_t s = sizeof(T);
-//        printf("%lu : %s\n",s,typeid(T).name());
+        //        size_t s = sizeof(T);
+        //        printf("%lu : %s\n",s,typeid(T).name());
 
-        return reinterpret_cast<T*>( malloc( n * sizeof(T) ) );
+        return reinterpret_cast<T*>( malloc( n * sizeof( T ) ) );
     }
-    void deallocate(T* p, size_type n)
+    void deallocate( T* p, size_type n )
     {
 
     };
@@ -321,6 +324,59 @@ struct pool_allocator
 //}
 
 
+#include <workthread.h>
+#include <array>
+
+using work_thread_t = WorkThread < size_t > ;
+
+
+
+
+
+struct foo
+{
+    foo* next;
+    int  value;
+};
+
+
+
+
+template<typename T>
+class aysnc_writer
+{
+private:
+
+protected:
+public:
+    aysnc_writer()
+    {
+    }
+
+    RC write(void* b,size_t c)
+    { 
+        return s_ok();
+    }
+
+};
+
+
+
+
+//  
+
+
+
+
+
+
+
+
+
+
+#include <alert_queue.h>
+
+
 //-------------------------------------------------------------------------------------------------
 //
 //
@@ -328,21 +384,70 @@ struct pool_allocator
 //
 int main()
 {
-    int iRet = ee5::Startup(0,nullptr);
+    int x = 0;
+    alert_queue<foo> q;
 
-    if( iRet == 0 )
+    q.enqueue( new foo { nullptr, ++x } );
+    q.enqueue( new foo { nullptr, ++x } );
+    q.enqueue( new foo { nullptr, ++x } );
+    q.enqueue( new foo { nullptr, ++x } );
+    q.enqueue( new foo { nullptr, ++x } );
+
+    foo* p = nullptr;
+    do
     {
-        LOG_ALWAYS("Good day!", "");
-
-        void tst_spin_locks();
-        tst_spin_locks();
-        //void tst_atomic_queue();
-        //tst_atomic_queue();
-
-        LOG_ALWAYS("Goodbye...", "");
-
-        ee5::Shutdown();
+        if( p = q.dequeue() )
+        {
+            printf( "%i\n", p->value );
+        }
     }
+    while( p );
+
+
+
+
+
+    //    std::vector<work_thread_t> dudes;
+    //
+    //    for( size_t i = 0; i < 8; ++i )
+    //    {
+    ////        dudes.push_back( work_thread_t( c, []( qitem_t& p ) { p->Execute(); } ) );
+    //    }
+    //
+    //    for( auto t : dudes )
+    //    {
+    //
+    //    }
+
+    //for( size_t i = 0; i < dudes..size();++i)
+    //{
+    //    x.Start();
+    //}
+
+
+    //foo b = { 1, 2 };
+
+    //works = b;
+
+    //foo a = works.load();
+
+
+
+    //int iRet = ee5::Startup(0,nullptr);
+
+    //if( iRet == 0 )
+    //{
+    //    LOG_ALWAYS("Good day!", "");
+
+    //    void tst_spin_locks();
+    //    tst_spin_locks();
+    //    //void tst_atomic_queue();
+    //    //tst_atomic_queue();
+
+    //    LOG_ALWAYS("Goodbye...", "");
+
+    //    ee5::Shutdown();
+    //}
 
 
     return 0;

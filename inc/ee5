@@ -19,3 +19,11 @@
 #define ENS(n) }
 
 
+#ifdef _MSC_VER
+#define ee5_alignas(x) __declspec( align( x ) )
+#else
+#define ee5_alignas(x) alignas(x)
+#endif
+
+
+#define CACHE_ALIGN 64

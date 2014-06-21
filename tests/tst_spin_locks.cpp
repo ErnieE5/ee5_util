@@ -166,7 +166,6 @@ stats lock_test(i_marshal_work* p,size_t iterations,size_t inner)
                 }
                 size_t fact_time = factorial_loop_timer.delta();
 
-
                 times.push_back( time_it( [&] { lock.lock(); } ) );
 
                 mode_work_data[fact_time]++;
