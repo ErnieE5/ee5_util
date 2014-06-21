@@ -318,7 +318,7 @@ struct pool_allocator
 //    printf("f3: %i\n",f3()   );
 //    printf("f4: %i\n",f4(55) );
 //
-//    printf("dude\n");
+   // printf("dude\n");
 //
 //    exit(0);
 //}
@@ -327,17 +327,12 @@ struct pool_allocator
 #include <workthread.h>
 #include <array>
 
-using work_thread_t = WorkThread < size_t > ;
 
 
 
 
 
-struct foo
-{
-    foo* next;
-    int  value;
-};
+
 
 
 
@@ -354,7 +349,7 @@ public:
     }
 
     RC write(void* b,size_t c)
-    { 
+    {
         return s_ok();
     }
 
@@ -363,7 +358,7 @@ public:
 
 
 
-//  
+//
 
 
 
@@ -372,9 +367,29 @@ public:
 
 
 
+struct foo
+{
+    foo* next;
+    size_t thread;
+    size_t value;
+};
 
 
 #include <alert_queue.h>
+
+
+
+//std::condition_variable cv1;
+//std::mutex park;
+
+static_memory_pool<64, 2000> a;
+//smp_queue_t<foo> q;
+//smp_c_queue_t<foo> q;
+smp_ccv_queue_t<foo> q;
+
+cv_event zzzzz;
+
+using work_thread_t = WorkThread< size_t >;
 
 
 //-------------------------------------------------------------------------------------------------
@@ -385,45 +400,95 @@ public:
 int main()
 {
     int x = 0;
-    alert_queue<foo> q;
 
-    q.enqueue( new foo { nullptr, ++x } );
-    q.enqueue( new foo { nullptr, ++x } );
-    q.enqueue( new foo { nullptr, ++x } );
-    q.enqueue( new foo { nullptr, ++x } );
-    q.enqueue( new foo { nullptr, ++x } );
+    size_t readers = 1;
+    size_t writers = 1;
 
-    foo* p = nullptr;
-    do
+    std::vector<work_thread_t> dudes;
+
+    auto remove = []( size_t x )
     {
-        if( p = q.dequeue() )
+        while( 1 )
         {
-            printf( "%i\n", p->value );
+            foo* p = q.dequeue();
+
+            if( p )
+            {
+                size_t n = p->thread;
+                size_t v = p->value;
+                printf( "%03lu:%03lu -- %7lu\n",x,n,v);
+                delete p;
+                if( v == 5555555 )
+                {
+                    return;
+                }
+            }
+            else
+            {
+                printf( "Zzzzzz...\n" );
+                fflush( stdout );
+                zzzzz.set();
+                q.wait();
+            }
+
         }
+
+    };
+
+    std::atomic_size_t nn;
+    auto insert = [&]( size_t x )
+    {
+        for( size_t c = 0; c < 5000; ++c )
+        {
+            q.enqueue( new foo { nullptr, x, ++nn } );
+            zzzzz.reset();
+        }
+    };
+
+    for( size_t r = 0; r < readers; ++r )
+    {
+        dudes.push_back( work_thread_t( r, remove ) );
     }
-    while( p );
 
+    for( size_t i = 0; i < writers; ++i )
+    {
+        dudes.push_back( work_thread_t( i, insert ));
+    }
+    
+    for( auto& t : dudes )
+    {
+        t.Startup();
+    }
 
+    for( size_t r = 0; r < readers; ++r )
+    {
+        dudes[r].Enqueue( std::move( r ) );
+    }
 
+    for( size_t i = readers; i < dudes.size(); ++i ) dudes[i].Enqueue( std::move( i ) );
+    for( size_t i = readers; i < dudes.size(); ++i ) dudes[i].Enqueue( std::move( i ) );
+    for( size_t i = readers; i < dudes.size(); ++i ) dudes[i].Enqueue( std::move( i ) );
+    for( size_t i = readers; i < dudes.size(); ++i ) dudes[i].Enqueue( std::move( i ) );
+    for( size_t i = readers; i < dudes.size(); ++i ) dudes[i].Enqueue( std::move( i ) );
+    for( size_t i = readers; i < dudes.size(); ++i ) dudes[i].Enqueue( std::move( i ) );
+    for( size_t i = readers; i < dudes.size(); ++i ) dudes[i].Enqueue( std::move( i ) );
+    for( size_t i = readers; i < dudes.size(); ++i ) dudes[i].Enqueue( std::move( i ) );
+    for( size_t i = readers; i < dudes.size(); ++i ) dudes[i].Enqueue( std::move( i ) );
+    for( size_t i = readers; i < dudes.size(); ++i ) dudes[i].Enqueue( std::move( i ) );
 
+    zzzzz.wait();
 
-    //    std::vector<work_thread_t> dudes;
-    //
-    //    for( size_t i = 0; i < 8; ++i )
-    //    {
-    ////        dudes.push_back( work_thread_t( c, []( qitem_t& p ) { p->Execute(); } ) );
-    //    }
-    //
-    //    for( auto t : dudes )
-    //    {
-    //
-    //    }
+    for( size_t r = 0; r < readers; ++r )
+    {
+        q.enqueue( new foo { nullptr, r, 5555555 } );
+    }
 
-    //for( size_t i = 0; i < dudes..size();++i)
-    //{
-    //    x.Start();
-    //}
+//    dudes[4].Enqueue( 555555 );
 
+    for( auto& t : dudes )
+    {
+        t.Quit();
+    }
 
     //foo b = { 1, 2 };
 

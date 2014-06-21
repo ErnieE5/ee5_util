@@ -16,6 +16,7 @@
 #include <ee5>
 
 #include <delegate.h>
+#include <error.h>
 #include <spin_locking.h>
 
 #include <condition_variable>
@@ -48,7 +49,7 @@ auto framed_lock(L& _mtx,F _f,TArgs...args) -> decltype(_f(args...))
 //
 //
 //
-class ThreadEvent
+class cv_event
 {
 private:
     using frame_lock = std::unique_lock<std::mutex>;
@@ -59,28 +60,28 @@ private:
 
 protected:
 public:
-    ThreadEvent()
+    cv_event()
     {
         event_set = false;
     }
-    ~ThreadEvent()
+    ~cv_event()
     {
     }
 
-    void Chill(bool after = false)
+    void wait(bool after = false)
     {
         frame_lock _lock(mtx);
         cv.wait( _lock, [&]{ return event_set; } );
         event_set = after;
     }
 
-    void Set()
+    void set()
     {
         framed_lock( mtx, [&] { event_set = true; } );
         cv.notify_one();
     }
 
-    void Reset()
+    void reset()
     {
         framed_lock( mtx, [&] { event_set = false; } );
     }
@@ -106,7 +107,7 @@ private:
     using work_method   = std::function<void(QItem&)>;
     using work_array    = std::array<QItem,load>;
 
-    ThreadEvent         sig;
+    cv_event            sig;
     size_t              user_id;
     std::atomic_size_t  pending;
     std::thread         thread;
@@ -189,7 +190,7 @@ private:
             {
                 // Stall the thread until a signal wakes us up
                 //
-                sig.Chill();
+                sig.wait();
             }
         }
 
@@ -212,6 +213,7 @@ public:
     WorkThread(size_t _user,work_method _f) : user_id(_user),method(_f)
     {
     }
+    WorkThread( const WorkThread& ) = delete;
     WorkThread(WorkThread&& _o) : user_id(_o.user_id),method( std::move( _o.method )  )
     {
     }
@@ -244,7 +246,7 @@ public:
         });
 
         // Wake up the thread.
-        sig.Set();
+        sig.set();
 
         if( join )
         {
@@ -268,7 +270,7 @@ public:
         //
         if( enqueued )
         {
-            sig.Set();
+            sig.set();
         }
 
         return enqueued;

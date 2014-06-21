@@ -43,7 +43,7 @@ using namespace ee5;
 class TP : public i_marshal_work
 {
 private:
-    ThreadEvent chill;
+    cv_event chill;
 
     using mem_pool_t    = static_memory_pool<128,10000>;
 
@@ -145,7 +145,6 @@ private:
 public:
     TP()
     {
-        printf("%p %p\n",&active,&x);
         active.lock();
     }
 
@@ -199,7 +198,7 @@ public:
     void Park(size_t _c)
     {
 //        c=_c;
-        chill.Chill();
+        chill.wait();
     }
 };
 

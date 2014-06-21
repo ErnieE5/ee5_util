@@ -16,13 +16,16 @@
 #include <ee5>
 
 #include <cassert>
+#include <condition_variable>
 #include <spin_locking.h>
+#include <workthread.h>
 
 BNS( ee5 )
+BNS( aq )
 //-------------------------------------------------------------------------------------------------
-// alert_queue
+// smp_queue
 //
-//  This is a simple template that manages a lock free queue based on more portable C++ 11 atomic
+//  This is a simple template that manages a lock free queue based on more portable C++11 atomic
 //  operations library. Use this template when the data structure contains a member value that
 //  allows for storage of a pointer to the next item down.
 //
@@ -34,16 +37,8 @@ BNS( ee5 )
 //
 //  The only current requirement is that the type T has a public ~data~ member named 'next.'
 //
-struct NullAlert
-{
-    void operator()()
-    {
-    };
-};
-
-
-template<typename T, typename A = NullAlert>
-class ee5_alignas( CACHE_ALIGN ) alert_queue
+template<typename T, typename B>
+class ee5_alignas( CACHE_ALIGN ) smp_queue : public B
 {
 private:
     // These member variables are all very likely to fit within a cache line. 
@@ -54,11 +49,10 @@ private:
     spin_flag   data_lock;
     T*          head;
     T*          tail;
-    A           alert;
 
 public:
     template<typename...TArgs>
-    alert_queue( TArgs...args ) : alert( args... )
+    smp_queue( TArgs...args ) : B( args... )
     {
         head = nullptr;
         tail = nullptr;
@@ -66,6 +60,8 @@ public:
 
     void enqueue( T* item )
     {
+        item->next = nullptr;
+
         // In an optimized build this becomes a very simple set of 
         // assembly instructions. Thank goodness for optimizing compilers!
         //
@@ -86,6 +82,7 @@ public:
                 //
                 head = tail = item;
             }
+            inc();
         } );
 
         // If an alert is requested, then signal it
@@ -94,30 +91,126 @@ public:
         //  alert is. (It is recommended that it be something like an Event (Windows) or 
         //  condition_variable (C++11).
         // 
-        alert();
+        set();
     }
 
     T* dequeue()
     {
         return framed_lock( data_lock, [&]()->T*
         {
-            T* ret = nullptr;
+            T* ret = head;
 
-            if( head )
+            if( ret )
             {
-                ret = head;
                 head = head->next;
                 if( !head )
                 {
                     assert( tail == ret );
                     tail = nullptr;
                 }
+                dec();
+            }
+            else
+            {
+                reset();
             }
 
             return ret;
         } );
     }
 
+    T* peek()
+    {
+        return head;
+    }
 };
+
+
+class bare
+{
+protected:
+    void set()
+    {
+    }
+    void reset()
+    {
+    }
+    void inc()
+    {
+    }
+    void dec()
+    {
+    }
+};
+
+
+class counter : bare
+{
+private:
+    volatile size_t c;
+protected:
+    counter()
+    {
+        c = 0;
+    }
+    using bare::set;
+    using bare::reset;
+    void inc()
+    {
+        ++c;
+    }
+    void dec()
+    {
+        --c;
+    }
+public:
+    size_t count()
+    {
+        return c;
+    }
+};
+
+
+template<typename B>
+class cv : B
+{
+private:
+    ee5::cv_event evnt;
+protected:
+    cv()
+    {
+    }
+    void set()
+    {
+        evnt.set();
+    }
+    void reset()
+    {
+        evnt.reset();
+    }
+    using B::inc;
+    using B::dec;
+public:
+    void wait()
+    {
+        evnt.wait();
+    }
+};
+
+
+
+ENS( aq )
+
+template<typename T>
+using smp_queue_t = aq::smp_queue < T, aq::bare > ;
+
+template<typename T>
+using smp_c_queue_t = aq::smp_queue < T, aq::counter > ;
+
+template<typename T>
+using smp_cv_queue_t = aq::smp_queue < T, aq::cv< aq::bare > > ;
+
+template<typename T>
+using smp_ccv_queue_t = aq::smp_queue < T, aq::cv< aq::counter > > ;
 
 ENS( ee5 )
