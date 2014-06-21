@@ -41,11 +41,11 @@ template<typename T, typename B>
 class ee5_alignas( CACHE_ALIGN ) smp_queue : public B
 {
 private:
-    // These member variables are all very likely to fit within a cache line. 
+    // These member variables are all very likely to fit within a cache line.
     // A spin lock is used because any thread that needs to modify the queue
-    // will have to lock the data values anyway and the added complexity of 
+    // will have to lock the data values anyway and the added complexity of
     // having separate locks would end up creating more stalls.
-    // 
+    //
     spin_flag   data_lock;
     T*          head;
     T*          tail;
@@ -62,7 +62,7 @@ public:
     {
         item->next = nullptr;
 
-        // In an optimized build this becomes a very simple set of 
+        // In an optimized build this becomes a very simple set of
         // assembly instructions. Thank goodness for optimizing compilers!
         //
         framed_lock( data_lock, [&]()
@@ -82,16 +82,16 @@ public:
                 //
                 head = tail = item;
             }
-            inc();
+            B::inc();
         } );
 
         // If an alert is requested, then signal it
-        // 
-        //  This is done outside of the lock, because we don't have any control over what the 
-        //  alert is. (It is recommended that it be something like an Event (Windows) or 
+        //
+        //  This is done outside of the lock, because we don't have any control over what the
+        //  alert is. (It is recommended that it be something like an Event (Windows) or
         //  condition_variable (C++11).
-        // 
-        set();
+        //
+        B::set();
     }
 
     T* dequeue()
@@ -108,11 +108,11 @@ public:
                     assert( tail == ret );
                     tail = nullptr;
                 }
-                dec();
+                B::dec();
             }
             else
             {
-                reset();
+                B::reset();
             }
 
             return ret;

@@ -399,8 +399,6 @@ using work_thread_t = WorkThread< size_t >;
 //
 int main()
 {
-    int x = 0;
-
     size_t readers = 1;
     size_t writers = 1;
 
@@ -435,7 +433,7 @@ int main()
 
     };
 
-    std::atomic_size_t nn;
+    std::atomic_size_t nn(0);
     auto insert = [&]( size_t x )
     {
         for( size_t c = 0; c < 5000; ++c )
@@ -454,7 +452,7 @@ int main()
     {
         dudes.push_back( work_thread_t( i, insert ));
     }
-    
+
     for( auto& t : dudes )
     {
         t.Startup();
