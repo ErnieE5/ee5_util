@@ -60,7 +60,7 @@ extern program_log __ee5_log;
 #define _TRACE(fmt,...) \
     _TRACE_N( FUNCTION_NAME, fmt, __VA_ARGS__ )
 
-#define LOG_MSG   (zone,        fmt,...) _TRACE(fmt,__VA_ARGS__)
+#define LOG_MSG(zone,        fmt,...) _TRACE(fmt,__VA_ARGS__)
 
 #define FRAME_EXIT() \
         static const ee5::__info ___ = { 0, FUNCTION_NAME, LOG_FACILITY, __FILE__, " } // %.6f s", __LINE__ }; \

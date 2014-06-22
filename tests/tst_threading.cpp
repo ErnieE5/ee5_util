@@ -45,7 +45,7 @@ class TP : public i_marshal_work
 private:
     cv_event chill;
 
-    using mem_pool_t    = static_memory_pool<128,10000>;
+    using mem_pool_t    = static_memory_pool<128,1000000>;
 
     struct deleter
     {
@@ -64,13 +64,6 @@ private:
             if(pool)
             {
                 pool->mem.release( buffer );
-                // if( pool->c )
-                // {
-                //     if(--(pool->c) == 0)
-                //     {
-//                        pool->chill.Set();
-                //     }
-                // }
             }
         }
     };
@@ -86,7 +79,7 @@ private:
     size_t              t_count;
 
     std::atomic_size_t  x;
-//    std::atomic_size_t  c;
+    std::atomic_size_t  c;
 
     bool lock()
     {
@@ -108,35 +101,22 @@ private:
 
         //         CBREx( size <= mem_pool::max_item_size, e_invalid_argument(2,"value must be non-null") );
         //         CBREx( pp != nullptr,                   e_invalid_argument(2,"value must be non-null") );
-        *pp = nullptr;
-        do
+
+        *pp = mem.acquire();
+
+        if(!*pp)
         {
-            static std::atomic<size_t> c;
-            static std::atomic<size_t> m;
-
-            *pp = mem.acquire();
-
-            if(!*pp)
-            {
-                return e_out_of_memory();
-                m++;
-            }
-            else
-            {
-                c++;
-            }
+            return e_out_of_memory();
         }
-        while(!*pp);
 
         return s_ok();
     }
 
     RC enqueue_work(i_marshaled_call* p)
     {
-        threads[std::rand()%t_count].Enqueue( qitem_t( p, deleter(*this) ) );
-        //threads[x%t_count].Enqueue( qitem_t( p, deleter(mem) ) );
-        //threads[0].Enqueue( qitem_t( p, deleter(mem) ) );
-        //threads[random()%8].Enqueue( qitem_t( p, deleter(mem) ) );
+        size_t v = std::rand() % t_count;
+//        size_t v = x%t_count;
+        threads[v].Enqueue( qitem_t( p, deleter(*this) ) );
         ++x;
         return s_ok();
     }
@@ -173,6 +153,8 @@ public:
         std::srand( static_cast<unsigned int>( std::time(0) ) );
 
         t_count = t;
+
+        printf( "%lu\n", std::this_thread::get_id() ); fflush( stdout );
 
         // Create the threads first...
         //
@@ -283,11 +265,11 @@ struct ThreadpoolTest
 
         for(size_t h = n;h > 2;h--)
         {
-            tp.Async( [&](size_t h)
-            {
-                long double v = Factorial( h );
-                framed_lock( lock, [&] { total+=v; } );
-            }, h );
+            //tp.Async( [&](size_t h)
+            //{
+            //    long double v = Factorial( h );
+            //    framed_lock( lock, [&] { total+=v; } );
+            //}, h );
         }
 
 
@@ -336,16 +318,10 @@ RC FunctionTests()
     // LOG_ALWAYS("%s","testing...");
 
     ThreadpoolTest  target;
-//    int             int_local       = 55555;
+    int             int_local       = 55555;
     double          double_local    = 55.555;
 
     TP& p = tp;
-
-//using spin_shared_mutex_t = spin_reader_writer_lock<is_32_bit>;
-
-    // grow_test();
-
-    // return s_ok();
 
     // Scalar Types
     //
@@ -366,7 +342,7 @@ RC FunctionTests()
     //
     //CRR( p.Async( &target, &ThreadpoolTest::TemplateRef, std::list<double>( { 1.1, 1.2, 1.3, 1.4, 1.5, 1.6 } ) ) );
     //CRR( p.Async( &target, &ThreadpoolTest::TemplateRef, std::vector<int>(  { 1, 2, 3, 4, 5 } )                ) );
-    //CRR( p.Async( &target, &ThreadpoolTest::String,      std::string("Ernie")                                  ) );
+    CRR( p.Async( &target, &ThreadpoolTest::String,      std::string("Ernie")                                  ) );
 
 
     // LValue Reference / Template
@@ -392,10 +368,10 @@ RC FunctionTests()
 
     // Scaler Types as references
     //
-    //CRR( p.Async( &target, &ThreadpoolTest::ScalarTypes, int_local ,double_local, sizeof(unsigned)           ) );
-    //CRR( p.Async( &target, &ThreadpoolTest::ScalarTypes, int_local ,double_local, sizeof(size_t)             ) );
-    //CRR( p.Async( &target, &ThreadpoolTest::ScalarTypes, int_local ,double_local, sizeof(unsigned long)      ) );
-    //CRR( p.Async( &target, &ThreadpoolTest::ScalarTypes, int_local ,double_local, sizeof(unsigned long long) ) );
+    CRR( p.Async( &target, &ThreadpoolTest::ScalarTypes, int_local ,double_local, sizeof(unsigned)           ) );
+    CRR( p.Async( &target, &ThreadpoolTest::ScalarTypes, int_local ,double_local, sizeof(size_t)             ) );
+    CRR( p.Async( &target, &ThreadpoolTest::ScalarTypes, int_local ,double_local, sizeof(unsigned long)      ) );
+    CRR( p.Async( &target, &ThreadpoolTest::ScalarTypes, int_local ,double_local, sizeof(unsigned long long) ) );
 
 
     int h = 0;  // This value is just used for lambda capture testing in the following
@@ -420,8 +396,8 @@ RC FunctionTests()
         CRR( p.Async( c_function, i ) );
     }
 
-    // Template Function
-    //
+    //// Template Function
+    ////
     CRR( p.Async( t_function<int>,       5   ) );
     CRR( p.Async( t_function<size_t>,    6   ) );
 
@@ -436,6 +412,7 @@ RC FunctionTests()
     //
     auto q = [&cc](size_t a,double b)
     {
+        us_stopwatch_s sw;
         long double ld = std::rand() * b;
 
         for(size_t i = 0;i < 1000;i++)
@@ -452,8 +429,7 @@ RC FunctionTests()
             LOG_UNAME("Lambda q","ld: %20.20lg",ld);
         }
 
-        //std::this_thread::yield();//sleep_for(std::chrono::nanoseconds(1));
-
+        //LOG_UNAME("Lambda q","%lu", sw.delta() );
 
         cc++; // The atomically incremented value
     };
@@ -475,14 +451,26 @@ RC FunctionTests()
     ms_stopwatch_f t1a;
     for(size_t g = 0;g < 2525252; g++)
     {
-        CRR( p.Async( q, 3, g*.3 ) );
+        RC rc;
+        do
+        {
+            rc = p.Async( q, 3, g*.3 );
+            std::this_thread::sleep_for( std::chrono::milliseconds( 1 ) );
+        }
+        while( s_ok() != rc );
     }
     LOG_ALWAYS("Phase One Complete... %5.3lf ms",t1a.delta<std::milli>());
 
     ms_stopwatch_f t2a;
     for(size_t g = 0;g < 5252524; g++)
     {
-        CRR( p.Async( q, 4, g*.4 ) );
+        RC rc;
+        do
+        {
+            rc = p.Async( q, 4, g*.4 );
+            std::this_thread::sleep_for( std::chrono::milliseconds( 1 ) );
+        }
+        while( s_ok() != rc );
     }
     LOG_ALWAYS("Phase Two Complete... %5.3lf ms",t2a.delta<std::milli>());
 

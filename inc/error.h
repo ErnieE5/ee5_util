@@ -34,7 +34,7 @@ typedef result_code_t   rc_t;
 
 #define CBREx( x, e )   do { if ( !(x) )           { return (e);                   } } while(0)
 #define CMA( x )        do { if ( (x) == nullptr ) { return e_out_of_memory();     } } while(0)
-#define CRR( x )        do { rc_t r=(x); if (r<0 ) { return r;                     } } while(0)
+#define CRR( x )        do { rc_t r=(x); if (r<0 ) { LOG_ALWAYS("Error %016llx",e_overflow()); return r;                     } } while(0)
 
 typedef ee5::result_code_t RC;
 

@@ -112,32 +112,45 @@ BNS( ee5 )
 // spin_flag
 //
 //  The spin_flag is an exclusive lock that uses the atomic flag as the core locking method to
-//  implement the barrier. Sometimes this can be faster because it is possible to save a reload
+//  implement the lock. Sometimes this can be faster because it is possible to save a reload
 //  of the expected value.
 //
 //  **Important** Note:
-//  The data sizeof this element is a single byte on an intel platform. This is "cheap" for
-//  memory, but be EXTRA careful that the data that is packed NEAR the storage of this
-//  lock doesn't contain ANOTHER spin that can cuase REALLY weird deadlocks.
+//  The sizeof this element CAN BE (based on compiler and OS) a single byte on an Intel processors. 
+//  This is "cheap" for memory, but be EXTRA careful that the data that is packed ~NEAR~ the 
+//  storage of this lock doesn't contain ANOTHER spin that can cause REALLY weird deadlocks or
+//  other stalls on a cache line. 
 //
 //  C++ concept: BasicLockable
 //
 class spin_flag
 {
-    std::atomic_flag barrier;
+#ifdef _MSC_VER
+    // As of cl 17.00.60610.1 ATOMIC_FLAG_INIT generates a compile error
+    std::atomic_flag l; /* = ATOMIC_FLAG_INIT; */
+#else
+    std::atomic_flag l = ATOMIC_FLAG_INIT;
+#endif
 
 public:
-    spin_flag() { barrier.clear(); }
-    spin_flag(const spin_flag&) = delete;
+    spin_flag()
+    {
+#ifdef _MSC_VER
+        l.clear();
+#endif
+    }
+    spin_flag( const spin_flag& ) = delete;
 
     void lock()
     {
-        while( barrier.test_and_set( std::memory_order_acquire ) );
+        while( l.test_and_set( std::memory_order_acquire ) )
+        {
+        }
     }
 
     void unlock()
     {
-        barrier.clear( std::memory_order_release );
+        l.clear( std::memory_order_release );
     }
 };
 
@@ -147,7 +160,7 @@ public:
 // spin_native
 //
 //  This routine uses the underlying POSIX routines to implement the spin lock. Can be a little
-//  slower as the implementation isn't always inline optimized. This barrier will generally
+//  slower as the implementation isn't always inline optimized. This lock will generally
 //  be slightly faster (over time) than the std::mutex, but only slightly. This implementation is
 //  mostly for completeness as other platforms could have different performance needs.
 //
@@ -217,7 +230,7 @@ public:
 //-------------------------------------------------------------------------------------------------
 // spin_mutex
 //
-//  A spin_mutex implements a mutex barrier (exclusive access). It is not reentrant. This is
+//  A spin_mutex implements a mutex lock (exclusive access). It is not reentrant. This is
 //  intended for use where two or more threads on an SMP system need to modify / access a value and
 //  the underlying modification is VERY short in nature. (Setting a few variables adding / removing
 //  items from a container, etc.)
@@ -230,19 +243,19 @@ class spin_mutex
     static const std::memory_order relaxed = std::memory_order_relaxed;
     static const std::memory_order acquire = std::memory_order_acquire;
 
-    std::atomic_bool barrier;
+    std::atomic_bool l;
 
 public:
     spin_mutex(const spin_mutex&) = delete;
     spin_mutex()
     {
-        barrier = false;
+        l = false;
     }
 
     void lock()
     {
         bool expected = false;
-        while( ! barrier.compare_exchange_strong( expected, true, acquire, relaxed ) )
+        while( ! l.compare_exchange_strong( expected, true, acquire, relaxed ) )
         {
             expected = false;
         }
@@ -250,14 +263,14 @@ public:
 
     void unlock()
     {
-         assert( barrier.load() == true );
-         barrier.store(false,release);
+         assert( l.load() == true );
+         l.store(false,release);
     }
 
     bool try_lock()
     {
         bool expected = false;
-        return barrier.compare_exchange_strong( expected, true, acquire, relaxed );
+        return l.compare_exchange_strong( expected, true, acquire, relaxed );
     }
 
 };
@@ -308,7 +321,7 @@ struct is_32_bit
     static const bool value = sizeof(void*) == sizeof(uint32_t);
 
     using  value_type   = uint_fast32_t;
-    using  barrier_type = std::atomic_uint_fast32_t;
+    using  lock_type    = std::atomic_uint_fast32_t;
 
     static const value_type addend_exclusive    = 0x00100000;
     static const value_type mask_exclusive      = 0x7FF00000;
@@ -322,7 +335,7 @@ struct is_64_bit
     static const bool value = sizeof(void*) == sizeof(uint64_t);
 
     using  value_type   = uint_fast64_t;
-    using  barrier_type = std::atomic_uint_fast64_t;
+    using  lock_type    = std::atomic_uint_fast64_t;
 
     static const value_type addend_exclusive    = 0x0000100000000000;
     static const value_type mask_exclusive      = 0x1FFFF00000000000;
@@ -351,7 +364,7 @@ private:
     static const std::memory_order acquire = std::memory_order_acquire;
 
     using storage_t = typename traits::value_type;
-    using barrier_t = typename traits::barrier_type;
+    using lock_t    = typename traits::lock_type;
 
     static const storage_t addend_exclusive = traits::addend_exclusive;
     static const storage_t mask_exclusive   = traits::mask_exclusive;
@@ -369,13 +382,13 @@ private:
     static_assert( (mask_shared > max_shared),                              "At least a single overflow bit is needed." );
     static_assert( (mask_shared & mask_exclusive) == 0,                     "No overlap of shared and exclusive bits allowed!" );
 
-    barrier_t  barrier;
+    lock_t  l;
 
 public:
     spin_reader_writer_lock(const spin_reader_writer_lock&) = delete;
     spin_reader_writer_lock()
     {
-        barrier = 0;
+        l = 0;
     }
 
     void lock()
@@ -383,32 +396,32 @@ public:
         // Spin until we acquire the write lock. Which we know is "ours" because
         // no one else owned it before.
         //
-        while( ( barrier.fetch_add(addend_exclusive,acquire) & mask_exclusive ) >= addend_exclusive )
+        while( ( l.fetch_add(addend_exclusive,acquire) & mask_exclusive ) >= addend_exclusive )
         {
-            barrier.fetch_sub(addend_exclusive,relaxed);
+            l.fetch_sub(addend_exclusive,relaxed);
         }
 
         // Spin while any readers are still owning a lock
         //
-        while( ( barrier.load() & mask_shared ) > 0 );
+        while( ( l.load() & mask_shared ) > 0 );
     }
 
     void unlock()
     {
-        barrier.fetch_sub(addend_exclusive,release);
+        l.fetch_sub(addend_exclusive,release);
     }
 
     bool try_lock()
     {
         // The only way this can succeed is if ALL writers and all readers
-        // are not doing anything, which means that the value in the barrier
+        // are not doing anything, which means that the value in the lock
         // had to be zero.
         //
-        bool owned = barrier.fetch_add(addend_exclusive,acquire) == 0;
+        bool owned = l.fetch_add(addend_exclusive,acquire) == 0;
 
         if( !owned )
         {
-            barrier.fetch_sub(addend_exclusive,relaxed);
+            l.fetch_sub(addend_exclusive,relaxed);
         }
 
         return owned;
@@ -419,31 +432,31 @@ public:
         // Happy case is that no writers want in and on a 64bit system by default fewer than
         // 1 billion readers are using the lock.
         //
-        while( ++barrier > max_shared )
+        while( ++l > max_shared )
         {
             // Unhappy we can't keep the lock
             //
-            --barrier;
+            --l;
 
             // Stay away until there is a reasonable chance we can take the lock. This
             // prevents a lockout while an exclusive owner is waiting for readers to exit.
             //
-            while(barrier > max_shared);
+            while(l > max_shared);
         }
     }
 
     void unlock_shared()
     {
-        --barrier;
+        --l;
     }
 
     bool try_lock_shared()
     {
-        bool owned = ++barrier <= max_shared;
+        bool owned = ++l <= max_shared;
 
         if(!owned)
         {
-            --barrier;
+            --l;
         }
 
         return owned;

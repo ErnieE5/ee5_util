@@ -43,7 +43,6 @@ struct
 LogLine
 {
     using time_point    = std::chrono::high_resolution_clock::time_point;
-    using thread_id     = std::thread::id;
     using mem_pool_t    = static_memory_pool<2048,1000>;
     using log_line_ptr  = mem_pool_t::unique_type<LogLine>;
 
@@ -52,7 +51,7 @@ LogLine
 
     time_point          time;
     const __info*       info;
-    thread_id           id;
+    size_t              id;
     size_t              cb_msg;
     char                msg[1];
 
@@ -135,7 +134,8 @@ private:
 
 #ifdef _MSC_VER
         auto  fraction  = c::duration_cast<milli>(d).count();
-        printf("[%s.%03luZ]|%s|:%lx %s %s\n", buf, fraction, pLL->info->facility, pLL->id, pLL->info->function, pLL->msg);
+        printf( "[%s.%03luZ]|%s|:%lx %s %s\n", buf, fraction, pLL->info->facility, pLL->id, pLL->info->function, pLL->msg ); 
+        fflush( stdout );
 #else
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wformat"

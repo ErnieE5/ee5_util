@@ -385,12 +385,44 @@ struct foo
 static_memory_pool<64, 2000> a;
 //smp_queue_t<foo> q;
 //smp_c_queue_t<foo> q;
-smp_ccv_queue_t<foo> q;
+smp_queue_t<foo> q;
 
 cv_event zzzzz;
 
 using work_thread_t = WorkThread< size_t >;
 
+
+//class Test
+//{
+//private:
+//    Test* ME()
+//    {
+//        return this;
+//    }
+//
+//    void impl_SomeFunction()
+//    {
+//    }
+//
+//    //decltype( )
+//
+//protected:
+//public:
+//    static Test* glarf;
+//
+//
+//    decltype( std::bind( &Test::impl_SomeFunction, std::declval<Test*>() ) ) async_SomeFunction;
+//
+//    Test() : async_SomeFunction( std::bind( &Test::impl_SomeFunction, this ) )
+//    {
+//    //    async_SomeFunction = ;
+//
+//        auto x = std::bind( &Test::impl_SomeFunction, this );
+//
+//        printf( "%s\n", typeid( decltype( std::bind( &Test::impl_SomeFunction, this ) ) ).name() );
+//    }
+//
+//};
 
 //-------------------------------------------------------------------------------------------------
 //
@@ -399,10 +431,57 @@ using work_thread_t = WorkThread< size_t >;
 //
 int main()
 {
+    int iRet = ee5::Startup(0,nullptr);
+
+    if( iRet == 0 )
+    {
+        LOG_ALWAYS("Good day!", "");
+
+        //void tst_spin_locks();
+        //tst_spin_locks();
+        //void tst_atomic_queue();
+        //tst_atomic_queue();
+        void tst_threading();
+        tst_threading();
+
+        LOG_ALWAYS("Goodbye...", "");
+
+        ee5::Shutdown();
+    }
+
+    return 0;
+
     int x = 0;
+
+//    Test t;
 
     size_t readers = 1;
     size_t writers = 1;
+
+    spin_flag f;
+
+    auto tf = [&]()
+    {
+        for( size_t qq = 0; qq < 1000; ++qq )
+        {
+            f.lock();
+            f.unlock();
+            std::this_thread::sleep_for( std::chrono::nanoseconds( std::rand() % 1000 ) );
+        }
+    };
+
+
+    s_stopwatch_f sw;
+    std::thread t1( tf );
+    std::thread t2( tf );
+
+    t1.join();
+    t2.join();
+
+    printf( "Time: %.6f s\n", sw.delta() );
+
+    return 0;
+
 
     std::vector<work_thread_t> dudes;
 
@@ -428,7 +507,7 @@ int main()
                 printf( "Zzzzzz...\n" );
                 fflush( stdout );
                 zzzzz.set();
-                q.wait();
+//                q.wait();
             }
 
         }
@@ -498,21 +577,6 @@ int main()
 
 
 
-    //int iRet = ee5::Startup(0,nullptr);
-
-    //if( iRet == 0 )
-    //{
-    //    LOG_ALWAYS("Good day!", "");
-
-    //    void tst_spin_locks();
-    //    tst_spin_locks();
-    //    //void tst_atomic_queue();
-    //    //tst_atomic_queue();
-
-    //    LOG_ALWAYS("Goodbye...", "");
-
-    //    ee5::Shutdown();
-    //}
 
 
     return 0;

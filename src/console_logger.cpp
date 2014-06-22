@@ -54,6 +54,7 @@ LogLine::mem_pool_t LogLine::mem;
 //
 //
 //
+size_t work_thread_id();
 void ConsoleLogger::console_log(const __info* i,...)
 {
     RC      rc  = s_ok();
@@ -70,7 +71,7 @@ void ConsoleLogger::console_log(const __info* i,...)
     if( rc == s_ok() )
     {
         pLogLine->time  = hrc_t::now();
-        pLogLine->id    = std::this_thread::get_id();
+        pLogLine->id    = work_thread_id();
         pLogLine->info  = i;
 
         rc = cb_vsnprintf(c, p, &c, &p, i->format, arg_list );
