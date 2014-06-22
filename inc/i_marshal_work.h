@@ -30,11 +30,13 @@ template<typename Arg>
 struct ref_val
 {
     using type = typename std::conditional<
-        /* if */    std::is_scalar< Arg >::value,
-        /* then */  Arg,
+        /* if */    std::is_scalar<             typename std::decay<Arg>::type >::value || 
+                    std::is_move_constructible< typename std::decay<Arg>::type >::value,
+        /* then */  typename std::decay<Arg>::type,
         /* else */  typename std::add_lvalue_reference<Arg>::type
     >::type;
 };
+
 
 //---------------------------------------------------------------------------------------------------------------------
 // i_marshal_work
@@ -62,7 +64,7 @@ private:
 
             if( rc == s_ok() )
             {
-                rc = enqueue_work( new(call) M( binder, args... ) );
+                rc = enqueue_work( new(call) M( binder, std::forward<TArgs>(args)... ) );
             }
 
             unlock();
@@ -81,19 +83,20 @@ public:
         using binder_t = object_method_delegate<O,void,typename ref_val<TArgs>::type...>;
         using method_t = marshaled_call<binder_t,typename std::remove_reference<TArgs>::type...>;
 
-        return __enqueue<binder_t,method_t>( binder_t(pO,pM), args... );
+        return __enqueue<binder_t,method_t>( binder_t(pO,pM), std::forward<TArgs>(args)... );
     }
-
+    
+    
     // Call a member function of a class in the context of a thread pool thread
     // with zero or more arguments that are constant lvalue types
     //
     template<typename O, typename...TArgs>
-    RC Async( O* pO, void ( O::*pM )( typename ref_val<TArgs>::type... ), const TArgs&...args )
+    RC Async( O* pO, void ( O::*pM )( typename ref_val<TArgs>::type... ), TArgs&...args )
     {
         using binder_t = object_method_delegate<O,void,typename ref_val<TArgs>::type...>;
         using method_t = marshaled_call<binder_t,typename std::remove_reference<TArgs>::type...>;
 
-        return __enqueue<binder_t,method_t>( binder_t(pO,pM), args... );
+        return __enqueue<binder_t,method_t>( binder_t(pO,pM), std::forward<TArgs>(args)... );
     }
 
     template<typename T>
@@ -147,12 +150,12 @@ public:
             TFunction
         >::type
     >
-    RC Async(TFunction f,TArg1 a,TArgs&&...args)
+    RC Async(TFunction f,TArg1&& a,TArgs&&...args)
     {
-        using binder_t = std::function<void(TArg1,typename ref_val<TArgs>::type...)>;
-        using method_t = marshaled_call<binder_t,TArg1,typename std::remove_reference<TArgs>::type...>;
+        using binder_t = std::function<void(typename ref_val<TArg1>::type,typename ref_val<TArgs>::type...)>;
+        using method_t = marshaled_call<binder_t,typename ref_val<TArg1>::type,typename std::remove_reference<TArgs>::type...>;
 
-        return __enqueue<binder_t,method_t>( f, a, args... );
+        return __enqueue<binder_t,method_t>( f, std::forward<TArg1>(a), std::forward<TArgs>(args)... );
     }
 
 };

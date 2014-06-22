@@ -75,7 +75,7 @@ const int cache_alignment_intel_x86_64 = 64;
 //      already be mapped.
 //
 //
-template< int item_size, int item_count, int align = cache_alignment_intel_x86_64 >
+template< size_t item_size, size_t item_count, size_t align = cache_alignment_intel_x86_64 >
 class static_memory_pool
 {
 private:

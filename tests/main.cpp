@@ -438,11 +438,14 @@ int main()
     {
         LOG_ALWAYS("Good day!", "");
 
-        //void tst_spin_locks();
-        //tst_spin_locks();
-        //void tst_atomic_queue();
-        //tst_atomic_queue();
+        void tst_spin_locks();
+        void tst_atomic_queue();
         void tst_threading();
+        
+        //tst_spin_locks();
+        
+        //tst_atomic_queue();
+        
         tst_threading();
 
         LOG_ALWAYS("Goodbye...", "");

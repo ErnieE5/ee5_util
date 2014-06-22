@@ -18,6 +18,7 @@
 #include <delegate.h>
 #include <error.h>
 #include <spin_locking.h>
+#include <stopwatch.h>
 
 #include <condition_variable>
 #include <memory>
@@ -86,7 +87,6 @@ public:
         framed_lock( mtx, [&] { event_set = false; } );
     }
 };
-
 
 
 
@@ -261,6 +261,7 @@ public:
             if(!quit)
             {
                 queue.push( std::move( p ) );
+                if(queue.size()<5) return true;
             }
 
             return !quit;
@@ -268,11 +269,11 @@ public:
 
         // Wake up the thread if it was sleeping
         //
-        if( enqueued )
+        if( !pending && enqueued )
         {
             sig.set();
         }
-
+        
         return enqueued;
     }
 };

@@ -135,7 +135,6 @@ private:
 #ifdef _MSC_VER
         auto  fraction  = c::duration_cast<milli>(d).count();
         printf( "[%s.%03luZ]|%s|:%lx %s %s\n", buf, fraction, pLL->info->facility, pLL->id, pLL->info->function, pLL->msg ); 
-        fflush( stdout );
 #else
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wformat"
@@ -143,6 +142,7 @@ private:
         printf("[%s.%06luZ]|%s|:%lx %s %s\n",buf, fraction,pLL->info->facility,pLL->id,pLL->info->function,pLL->msg);
 #pragma GCC diagnostic pop
 #endif
+        fflush( stdout );
     }
 
 protected:

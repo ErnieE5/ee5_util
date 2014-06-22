@@ -162,7 +162,7 @@ private:
     template<int...S>
     TReturn tuple_call( sequence<S...> )
     {
-        return method( std::get<S>(values)... );
+        return method( std::move( std::get<S>(values) )... );
     }
 
 
@@ -172,7 +172,8 @@ public:
     {
     }
 
-    marshal_delegate(TFunction f,const TArgs&...args ) :
+    template<typename...Ta1>
+    marshal_delegate(TFunction f,const Ta1&...args ) :
         method( f ), values( args... )
     {
     }
@@ -213,7 +214,8 @@ public:
     {
     }
 
-    marshaled_call(TFunction f, const TArgs&...args) :
+    template<typename...Ta1>
+    marshaled_call(TFunction f, const Ta1&...args) :
         call( f, args... )
     {
     }

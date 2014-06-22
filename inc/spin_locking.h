@@ -247,9 +247,8 @@ class spin_mutex
 
 public:
     spin_mutex(const spin_mutex&) = delete;
-    spin_mutex()
+    spin_mutex() : l(false)
     {
-        l = false;
     }
 
     void lock()
@@ -386,9 +385,8 @@ private:
 
 public:
     spin_reader_writer_lock(const spin_reader_writer_lock&) = delete;
-    spin_reader_writer_lock()
+    spin_reader_writer_lock() : l(0)
     {
-        l = 0;
     }
 
     void lock()

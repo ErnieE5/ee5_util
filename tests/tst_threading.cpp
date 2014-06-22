@@ -43,7 +43,7 @@ using namespace ee5;
 class TP : public i_marshal_work
 {
 private:
-    cv_event chill;
+//    cv_event chill;
 
     using mem_pool_t    = static_memory_pool<128,1000000>;
 
@@ -64,6 +64,8 @@ private:
             if(pool)
             {
                 pool->mem.release( buffer );
+//                pool->chill.set(); 
+//                --pool->c;
             }
         }
     };
@@ -72,7 +74,7 @@ private:
     using work_thread_t = WorkThread<qitem_t>;
     using tvec_t        = std::vector<work_thread_t>;
 
-    spin_shared_mutex_t active;
+    ee5_alignas(64) spin_shared_mutex_t active;
 
     mem_pool_t          mem;
     tvec_t              threads;
@@ -108,7 +110,9 @@ private:
         {
             return e_out_of_memory();
         }
-
+        
+//        ++c;
+        
         return s_ok();
     }
 
@@ -116,7 +120,9 @@ private:
     {
         size_t v = std::rand() % t_count;
 //        size_t v = x%t_count;
+        
         threads[v].Enqueue( qitem_t( p, deleter(*this) ) );
+
         ++x;
         return s_ok();
     }
@@ -125,6 +131,8 @@ private:
 public:
     TP()
     {
+        printf("wt=%lu\n",sizeof(work_thread_t));
+        
         active.lock();
     }
 
@@ -154,8 +162,6 @@ public:
 
         t_count = t;
 
-        printf( "%lu\n", std::this_thread::get_id() ); fflush( stdout );
-
         // Create the threads first...
         //
         for(size_t c = t_count; c ; --c)
@@ -180,7 +186,7 @@ public:
     void Park(size_t _c)
     {
 //        c=_c;
-        chill.wait();
+//        chill.wait();
     }
 };
 
@@ -314,6 +320,7 @@ void t_function(T t)
 //
 RC FunctionTests()
 {
+
     // LOG_FRAME(0,"Thread pool %s","test!");
     // LOG_ALWAYS("%s","testing...");
 
@@ -322,7 +329,8 @@ RC FunctionTests()
     double          double_local    = 55.555;
 
     TP& p = tp;
-
+    
+#if 0
     // Scalar Types
     //
     CRR( p.Async( &target, &ThreadpoolTest::ScalarTypes, 1, 11.1, size_t(1000000000000000ull) ) );
@@ -402,7 +410,7 @@ RC FunctionTests()
     CRR( p.Async( t_function<size_t>,    6   ) );
 
 
-
+    ee5_alignas( 128 )
     std::atomic_ulong cc;   // This value is used to sum the number of calls to the lambda "q"
                             // and is done via a capture. The sum at the end of the test should
     cc = 0;                 // be equal to 7777777.
@@ -412,13 +420,14 @@ RC FunctionTests()
     //
     auto q = [&cc](size_t a,double b)
     {
-        us_stopwatch_s sw;
+//        us_stopwatch_s sw;
         long double ld = std::rand() * b;
 
-        for(size_t i = 0;i < 1000;i++)
+        for(size_t i = 0;i < 10000;i++)
         {
             ld += ThreadpoolTest::Factorial(25);
         }
+//        printf("yyyyy %lu\n",sw.delta());
 
         // This should never happen, but the optimizer is too good
         // and will completely compile this code away if there is
@@ -455,7 +464,11 @@ RC FunctionTests()
         do
         {
             rc = p.Async( q, 3, g*.3 );
-            std::this_thread::sleep_for( std::chrono::milliseconds( 1 ) );
+            if(rc!=s_ok())
+            {
+                printf("%lx ,%lu\n",rc,g);
+                std::this_thread::sleep_for( std::chrono::milliseconds( 1000 ) );
+            }
         }
         while( s_ok() != rc );
     }
@@ -468,61 +481,78 @@ RC FunctionTests()
         do
         {
             rc = p.Async( q, 4, g*.4 );
-            std::this_thread::sleep_for( std::chrono::milliseconds( 1 ) );
+            if(rc!=s_ok())
+            {
+                printf("%lx ,%lu\n",rc,g);
+                std::this_thread::sleep_for( std::chrono::milliseconds( 1000 ) );
+            }
         }
         while( s_ok() != rc );
     }
     LOG_ALWAYS("Phase Two Complete... %5.3lf ms",t2a.delta<std::milli>());
-
+#endif    
+    
     ee5_alignas( 128 ) spin_flag lock;
 
-    std::list<size_t>   complete;
-    auto join = [&lock,&complete](std::vector<int> add)
+    using lsize_t = std::vector<size_t>;
+    
+    lsize_t   complete;
+    auto join = [&lock,&complete](lsize_t add)
     {
         us_stopwatch_f x;
-        framed_lock( lock, [&add,&complete]()
+        framed_lock( lock, [&]()
         {
+            LOG_UNAME("jtst","0x%.16lx Items %11lu  Time: %12.0f us join delay", add.data(),add.size(),x.delta());
             complete.push_back( add.size() );
-            LOG_UNAME("join","size: %10lu add: %10lu",complete.size(),add.size());
         });
-
-        LOG_UNAME("Elapsed Time mutex","%10.0lf us",x.delta());
+        LOG_UNAME("jtst","0x%.16lx Items %11lu  Time: %12.0f us join", add.data(),add.size(),x.delta());
     };
 
+    auto inner = [&join](lsize_t v1)
+    {
+        us_stopwatch_f t;
+        std::generate(v1.begin(),v1.end(), []()->size_t{ return std::rand(); });
+        LOG_UNAME("jtst","0x%.16lx Items %11lu  Time: %12.0f us inner", v1.data(),v1.size(),t.delta());
+        
+        p.Async( join, std::move(v1) );
+    };
+    
+    auto outer = [&join,&inner](size_t size)
+    {
+        us_stopwatch_f t;
+        
+        try
+        {
+            lsize_t v( size );
+            
+            size_t* addr = v.data();
+        
+            p.Async( inner, std::move(v) );
+            
+            LOG_UNAME("jtst","0x%.16lx Items %11lu  Time: %12.0f us outer",      addr,     size, t.delta() );
+        }
+        catch(std::bad_alloc)
+        {
+        }
+//        LOG_UNAME("fart ","0x%.16lx Items %11lu  Time: %12.0f us outer post", v.data(), size, t.delta() );
+    };
+    
     // This test "adds" more time by creating a large amount of work
     // by doing "heap stuff" on a number of threads.
     //
-    for(unsigned long long size = 1; size < 1000000000; size *= 10)
+    for(size_t size = 1; size < 100000000000000; size *= 10)
     {
-        CRR( p.Async( [&]
-        {
-            us_stopwatch_f t;
-
-            std::vector<int> v( size );
-
-            int* addr = v.data();
-
-            p.Async( [&](std::vector<int> v1)
-            {
-                us_stopwatch_f t;
-                std::generate(v1.begin(),v1.end(), []{ return std::rand(); });
-                LOG_UNAME("fart ","0x%.16lx Items %11lu, Time: %12.0f us inner", v1.data(),v1.size(),t.delta());
-
-                p.Async( join, std::move(v1) );
-            },
-            std::move(v) );
-
-            LOG_UNAME("fart ","0x%.16lx Items %11lu, Time: %12.0f us outer", addr, v.size(), t.delta() );
-
-        } ) );
+        p.Async( outer, size );
     }
 
+    while(tp.Pending()) { LOG_ALWAYS("Pending...%lu",tp.Pending()); std::this_thread::sleep_for(std::chrono::seconds(1)); }
 
-    assert( cc == 7777777 );
-
-    LOG_ALWAYS("cc == %lu", cc.load() );
+//     assert( cc == 7777777 );
+// 
+//     LOG_ALWAYS("cc == %lu", cc.load() );
 
     LOG_ALWAYS("Asta........","");
+
 
     return s_ok();
 }
@@ -538,12 +568,39 @@ size_t  tp_count()          { return tp.Count();    }
 void    tp_park(size_t c)   { tp.Park(c);           }
 
 
+
 void tst_threading()
 {
-    h_stopwatch_d sw;
-
+    s_stopwatch_d sw;
+    
+    int int_local = 5;
+    double double_local = 5.5;
+    
+//     printf("%lu\n",sizeof(ptrdiff_t));
+//     printf("%lu\n",sizeof(long));
+//     
+//     using lsize_t = std::vector<ptrdiff_t>;
+//     lsize_t v1(1000);
+//     printf("v1 %p\n",v1.data());
+//     
+//     lsize_t v2( std::move(v1) );
+//     printf("v2 %p\n",v2.data());
+//     
+//     lsize_t v3( std::move(v2) );
+//     printf("v3 %p\n",v3.data());
+//     
+//     lsize_t v4( std::move(v3) );
+//     printf("v4 %p\n",v4.data());
+//     
+//     printf("v1 %lu\n",v1.size());
+//     printf("v2 %lu\n",v2.size());
+//     printf("v3 %lu\n",v3.size());
+//     printf("v4 %lu\n",v4.size());
+// 
+//     return;
+    
     tp.Start();
-
+    
     FunctionTests();
 
     tp.Shutdown();
@@ -551,5 +608,5 @@ void tst_threading()
     // LOG_ALWAYS("%s","互いに同胞の精神をもって行動しなければならない。");
     // LOG_ALWAYS("%s","请以手足关系的精神相对待");
 
-    LOG_ALWAYS("Elapsed time %.6f h",sw.delta());
+    LOG_ALWAYS("Elapsed time %.6f s",sw.delta());
 }
