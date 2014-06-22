@@ -385,7 +385,7 @@ struct foo
 static_memory_pool<64, 2000> a;
 //smp_queue_t<foo> q;
 //smp_c_queue_t<foo> q;
-smp_queue_t<foo> q;
+//smp_queue_t<foo> q;
 
 cv_event zzzzz;
 
@@ -431,6 +431,7 @@ using work_thread_t = WorkThread< size_t >;
 //
 int main()
 {
+
     int iRet = ee5::Startup(0,nullptr);
 
     if( iRet == 0 )
@@ -483,91 +484,91 @@ int main()
     return 0;
 
 
-    std::vector<work_thread_t> dudes;
-
-    auto remove = []( size_t x )
-    {
-        while( 1 )
-        {
-            foo* p = q.dequeue();
-
-            if( p )
-            {
-                size_t n = p->thread;
-                size_t v = p->value;
-                printf( "%03lu:%03lu -- %7lu\n",x,n,v);
-                delete p;
-                if( v == 5555555 )
-                {
-                    return;
-                }
-            }
-            else
-            {
-                printf( "Zzzzzz...\n" );
-                fflush( stdout );
-                zzzzz.set();
-//                q.wait();
-            }
-
-        }
-
-    };
-
-    std::atomic_size_t nn;
-    auto insert = [&]( size_t x )
-    {
-        for( size_t c = 0; c < 5000; ++c )
-        {
-            q.enqueue( new foo { nullptr, x, ++nn } );
-            zzzzz.reset();
-        }
-    };
-
-    for( size_t r = 0; r < readers; ++r )
-    {
-        dudes.push_back( work_thread_t( r, remove ) );
-    }
-
-    for( size_t i = 0; i < writers; ++i )
-    {
-        dudes.push_back( work_thread_t( i, insert ));
-    }
-    
-    for( auto& t : dudes )
-    {
-        t.Startup();
-    }
-
-    for( size_t r = 0; r < readers; ++r )
-    {
-        dudes[r].Enqueue( std::move( r ) );
-    }
-
-    for( size_t i = readers; i < dudes.size(); ++i ) dudes[i].Enqueue( std::move( i ) );
-    for( size_t i = readers; i < dudes.size(); ++i ) dudes[i].Enqueue( std::move( i ) );
-    for( size_t i = readers; i < dudes.size(); ++i ) dudes[i].Enqueue( std::move( i ) );
-    for( size_t i = readers; i < dudes.size(); ++i ) dudes[i].Enqueue( std::move( i ) );
-    for( size_t i = readers; i < dudes.size(); ++i ) dudes[i].Enqueue( std::move( i ) );
-    for( size_t i = readers; i < dudes.size(); ++i ) dudes[i].Enqueue( std::move( i ) );
-    for( size_t i = readers; i < dudes.size(); ++i ) dudes[i].Enqueue( std::move( i ) );
-    for( size_t i = readers; i < dudes.size(); ++i ) dudes[i].Enqueue( std::move( i ) );
-    for( size_t i = readers; i < dudes.size(); ++i ) dudes[i].Enqueue( std::move( i ) );
-    for( size_t i = readers; i < dudes.size(); ++i ) dudes[i].Enqueue( std::move( i ) );
-
-    zzzzz.wait();
-
-    for( size_t r = 0; r < readers; ++r )
-    {
-        q.enqueue( new foo { nullptr, r, 5555555 } );
-    }
-
-//    dudes[4].Enqueue( 555555 );
-
-    for( auto& t : dudes )
-    {
-        t.Quit();
-    }
+//    std::vector<work_thread_t> dudes;
+//
+//    auto remove = []( size_t x )
+//    {
+//        while( 1 )
+//        {
+//            foo* p = q.dequeue();
+//
+//            if( p )
+//            {
+//                size_t n = p->thread;
+//                size_t v = p->value;
+//                printf( "%03lu:%03lu -- %7lu\n",x,n,v);
+//                delete p;
+//                if( v == 5555555 )
+//                {
+//                    return;
+//                }
+//            }
+//            else
+//            {
+//                printf( "Zzzzzz...\n" );
+//                fflush( stdout );
+//                zzzzz.set();
+////                q.wait();
+//            }
+//
+//        }
+//
+//    };
+//
+//    std::atomic_size_t nn(0);
+//    auto insert = [&]( size_t x )
+//    {
+//        for( size_t c = 0; c < 5000; ++c )
+//        {
+//            q.enqueue( new foo { nullptr, x, ++nn } );
+//            zzzzz.reset();
+//        }
+//    };
+//
+//    for( size_t r = 0; r < readers; ++r )
+//    {
+//        dudes.push_back( work_thread_t( r, remove ) );
+//    }
+//
+//    for( size_t i = 0; i < writers; ++i )
+//    {
+//        dudes.push_back( work_thread_t( i, insert ));
+//    }
+//
+//    for( auto& t : dudes )
+//    {
+//        t.Startup();
+//    }
+//
+//    for( size_t r = 0; r < readers; ++r )
+//    {
+//        dudes[r].Enqueue( std::move( r ) );
+//    }
+//
+//    for( size_t i = readers; i < dudes.size(); ++i ) dudes[i].Enqueue( std::move( i ) );
+//    for( size_t i = readers; i < dudes.size(); ++i ) dudes[i].Enqueue( std::move( i ) );
+//    for( size_t i = readers; i < dudes.size(); ++i ) dudes[i].Enqueue( std::move( i ) );
+//    for( size_t i = readers; i < dudes.size(); ++i ) dudes[i].Enqueue( std::move( i ) );
+//    for( size_t i = readers; i < dudes.size(); ++i ) dudes[i].Enqueue( std::move( i ) );
+//    for( size_t i = readers; i < dudes.size(); ++i ) dudes[i].Enqueue( std::move( i ) );
+//    for( size_t i = readers; i < dudes.size(); ++i ) dudes[i].Enqueue( std::move( i ) );
+//    for( size_t i = readers; i < dudes.size(); ++i ) dudes[i].Enqueue( std::move( i ) );
+//    for( size_t i = readers; i < dudes.size(); ++i ) dudes[i].Enqueue( std::move( i ) );
+//    for( size_t i = readers; i < dudes.size(); ++i ) dudes[i].Enqueue( std::move( i ) );
+//
+//    zzzzz.wait();
+//
+//    for( size_t r = 0; r < readers; ++r )
+//    {
+//        q.enqueue( new foo { nullptr, r, 5555555 } );
+//    }
+//
+////    dudes[4].Enqueue( 555555 );
+//
+//    for( auto& t : dudes )
+//    {
+//        t.Quit();
+//    }
 
     //foo b = { 1, 2 };
 
