@@ -545,7 +545,7 @@ RC FunctionTests()
         p.Async( outer, size );
     }
 
-    while(tp.Pending()) { LOG_ALWAYS("Pending...%lu",tp.Pending()); std::this_thread::sleep_for(std::chrono::seconds(1)); }
+    while(tp.Pending()) { /*LOG_ALWAYS("Pending...%lu",tp.Pending());*/ std::this_thread::sleep_for(std::chrono::milliseconds(1)); }
 
 //     assert( cc == 7777777 );
 //
