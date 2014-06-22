@@ -247,8 +247,9 @@ class spin_mutex
 
 public:
     spin_mutex(const spin_mutex&) = delete;
-    spin_mutex() : l(false)
+    spin_mutex() 
     {
+        l = false;
     }
 
     void lock()

@@ -508,7 +508,7 @@ RC FunctionTests()
         LOG_UNAME("jtst","0x%.16lx Items %11lu  Time: %12.0f us join", add.data(),add.size(),x.delta());
     };
 
-    auto inner = [&join](lsize_t v1)
+    auto inner = [&p,&join](lsize_t v1)
     {
         us_stopwatch_f t;
         std::generate(v1.begin(),v1.end(), []()->size_t{ return std::rand(); });
@@ -517,7 +517,7 @@ RC FunctionTests()
         p.Async( join, std::move(v1) );
     };
 
-    auto outer = [&join,&inner](size_t size)
+    auto outer = [&p,&join,&inner](size_t size)
     {
         us_stopwatch_f t;
 
