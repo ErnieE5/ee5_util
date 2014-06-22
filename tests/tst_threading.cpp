@@ -64,7 +64,7 @@ private:
             if(pool)
             {
                 pool->mem.release( buffer );
-//                pool->chill.set(); 
+//                pool->chill.set();
 //                --pool->c;
             }
         }
@@ -110,9 +110,9 @@ private:
         {
             return e_out_of_memory();
         }
-        
+
 //        ++c;
-        
+
         return s_ok();
     }
 
@@ -120,7 +120,7 @@ private:
     {
         size_t v = std::rand() % t_count;
 //        size_t v = x%t_count;
-        
+
         threads[v].Enqueue( qitem_t( p, deleter(*this) ) );
 
         ++x;
@@ -132,7 +132,7 @@ public:
     TP()
     {
         printf("wt=%lu\n",sizeof(work_thread_t));
-        
+
         active.lock();
     }
 
@@ -329,7 +329,7 @@ RC FunctionTests()
     double          double_local    = 55.555;
 
     TP& p = tp;
-    
+
 #if 0
     // Scalar Types
     //
@@ -490,12 +490,12 @@ RC FunctionTests()
         while( s_ok() != rc );
     }
     LOG_ALWAYS("Phase Two Complete... %5.3lf ms",t2a.delta<std::milli>());
-#endif    
-    
+#endif
+
     ee5_alignas( 128 ) spin_flag lock;
 
     using lsize_t = std::vector<size_t>;
-    
+
     lsize_t   complete;
     auto join = [&lock,&complete](lsize_t add)
     {
@@ -513,22 +513,22 @@ RC FunctionTests()
         us_stopwatch_f t;
         std::generate(v1.begin(),v1.end(), []()->size_t{ return std::rand(); });
         LOG_UNAME("jtst","0x%.16lx Items %11lu  Time: %12.0f us inner", v1.data(),v1.size(),t.delta());
-        
+
         p.Async( join, std::move(v1) );
     };
-    
+
     auto outer = [&join,&inner](size_t size)
     {
         us_stopwatch_f t;
-        
+
         try
         {
             lsize_t v( size );
-            
+
             size_t* addr = v.data();
-        
+
             p.Async( inner, std::move(v) );
-            
+
             LOG_UNAME("jtst","0x%.16lx Items %11lu  Time: %12.0f us outer",      addr,     size, t.delta() );
         }
         catch(std::bad_alloc)
@@ -536,11 +536,11 @@ RC FunctionTests()
         }
 //        LOG_UNAME("fart ","0x%.16lx Items %11lu  Time: %12.0f us outer post", v.data(), size, t.delta() );
     };
-    
+
     // This test "adds" more time by creating a large amount of work
     // by doing "heap stuff" on a number of threads.
     //
-    for(size_t size = 1; size < 100000000000000; size *= 10)
+    for(size_t size = 1; size < 100000000; size *= 10)
     {
         p.Async( outer, size );
     }
@@ -548,7 +548,7 @@ RC FunctionTests()
     while(tp.Pending()) { LOG_ALWAYS("Pending...%lu",tp.Pending()); std::this_thread::sleep_for(std::chrono::seconds(1)); }
 
 //     assert( cc == 7777777 );
-// 
+//
 //     LOG_ALWAYS("cc == %lu", cc.load() );
 
     LOG_ALWAYS("Asta........","");
@@ -572,35 +572,35 @@ void    tp_park(size_t c)   { tp.Park(c);           }
 void tst_threading()
 {
     s_stopwatch_d sw;
-    
+
     int int_local = 5;
     double double_local = 5.5;
-    
+
 //     printf("%lu\n",sizeof(ptrdiff_t));
 //     printf("%lu\n",sizeof(long));
-//     
+//
 //     using lsize_t = std::vector<ptrdiff_t>;
 //     lsize_t v1(1000);
 //     printf("v1 %p\n",v1.data());
-//     
+//
 //     lsize_t v2( std::move(v1) );
 //     printf("v2 %p\n",v2.data());
-//     
+//
 //     lsize_t v3( std::move(v2) );
 //     printf("v3 %p\n",v3.data());
-//     
+//
 //     lsize_t v4( std::move(v3) );
 //     printf("v4 %p\n",v4.data());
-//     
+//
 //     printf("v1 %lu\n",v1.size());
 //     printf("v2 %lu\n",v2.size());
 //     printf("v3 %lu\n",v3.size());
 //     printf("v4 %lu\n",v4.size());
-// 
+//
 //     return;
-    
+
     tp.Start();
-    
+
     FunctionTests();
 
     tp.Shutdown();
