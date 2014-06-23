@@ -38,6 +38,90 @@ struct ref_val
 };
 
 
+
+template <class T>
+struct marshal_allocator
+{
+    typedef T               value_type;
+    typedef T*              pointer;
+    typedef const T*        const_pointer;
+    typedef T&              reference;
+    typedef const T&        const_reference;
+    typedef std::size_t     size_type;
+    typedef std::ptrdiff_t  difference_type;
+
+    template<typename O> struct rebind
+    {
+        typedef marshal_allocator<O> other;
+    };
+
+    void**  data;
+    size_t* size;
+
+    marshal_allocator()
+    {
+    }
+
+    marshal_allocator(size_t* s,void** d)
+    {
+        size = s;
+        data = d;
+    };
+
+    marshal_allocator(const marshal_allocator& o)
+    {
+        size = o.size;
+        data = o.data;
+    };
+
+    template< class O >
+    marshal_allocator(const marshal_allocator<O>& o)
+    {
+        size = o.size;
+        data = o.data;
+    };
+
+
+    template< class A, class... Args >
+    void construct( A* item, Args&&... args )
+    {
+        ::new( reinterpret_cast<void*>( item ) ) A( std::forward<Args>( args )... );
+    }
+    void destroy( T* item)
+    {
+        if( item )
+        {
+            item->~T();
+        }
+    }
+
+    T* allocate( size_type n, const_pointer hint = 0 )
+    {
+        T* ret = nullptr;
+        size_t a = n * sizeof( T );
+        if( *size > a )
+        {
+            ret = reinterpret_cast<T*>( ( reinterpret_cast<char*>( *data ) + *size - a ) );
+//            *data = ( reinterpret_cast<char*>( *data ) + *size - a );
+            *size -= a;
+            
+        }
+
+        return ret;
+    }
+    void deallocate( T* p, size_type n )
+    {
+
+    };
+};
+
+template <class T, class U>
+bool operator==( const marshal_allocator<T>&, const marshal_allocator<U>& );
+template <class T, class U>
+bool operator!=( const marshal_allocator<T>&, const marshal_allocator<U>& );
+
+
+
 //---------------------------------------------------------------------------------------------------------------------
 // i_marshal_work
 //
@@ -46,10 +130,10 @@ struct ref_val
 class i_marshal_work
 {
 private:
-    virtual bool    lock()                              = 0;
-    virtual void    unlock()                            = 0;
-    virtual RC      get_storage(size_t size,void** p)   = 0;
-    virtual RC      enqueue_work(i_marshaled_call *)    = 0;
+    virtual bool    lock()                                  = 0;
+    virtual void    unlock()                                = 0;
+    virtual RC      get_storage(size_t* size,void** data)   = 0;
+    virtual RC      enqueue_work(i_marshaled_call *)        = 0;
 
 
     template< typename B, typename M, typename...TArgs >
@@ -60,11 +144,13 @@ private:
 
         if( lock() )
         {
-            rc = get_storage( sizeof(M), reinterpret_cast<void**>(&call) );
+            size_t size = sizeof( M );
+
+            rc = get_storage( &size, reinterpret_cast<void**>(&call) );
 
             if( rc == s_ok() )
             {
-                rc = enqueue_work( new(call) M( binder, std::forward<TArgs>(args)... ) );
+                rc = enqueue_work( new(call) M( std::forward<B>(binder), std::forward<TArgs>(args)... ) );
             }
 
             unlock();
@@ -99,16 +185,19 @@ public:
         return __enqueue<binder_t,method_t>( binder_t(pO,pM), std::forward<TArgs>(args)... );
     }
 
-    template<typename T>
+    template<typename F>
     struct VoidVoid : public i_marshaled_call
     {
-        T func;
-        VoidVoid(T f) :func(f) {}
+        F func;
+        VoidVoid(F f) :func(f) {}
         virtual void Execute()
         {
             func();
         }
     };
+
+    template<typename...TArgs>
+    using FuncPtr = void(*)( typename ref_val<TArgs>::type... );
 
 
     // Call any function or functor that can compile to a void(void) signature
@@ -152,10 +241,33 @@ public:
     >
     RC Async(TFunction f,TArg1&& a,TArgs&&...args)
     {
-        using binder_t = std::function<void(typename ref_val<TArg1>::type,typename ref_val<TArgs>::type...)>;
+        using binder_t = std::function<void( typename ref_val<TArg1>::type, typename ref_val<TArgs>::type... )>;
         using method_t = marshaled_call<binder_t,typename ref_val<TArg1>::type,typename std::remove_reference<TArgs>::type...>;
 
-        return __enqueue<binder_t,method_t>( f, std::forward<TArg1>(a), std::forward<TArgs>(args)... );
+        RC rc = e_pool_terminated();
+
+        if( lock() )
+        {
+            size_t size = sizeof( binder_t ) + sizeof( method_t );
+            void*  data = nullptr;
+            rc = get_storage( &size , &data );
+
+            if( rc == s_ok() )
+            {
+                void* b = data;
+                binder_t  binder( f, marshal_allocator<binder_t>(&size,&b) );
+                method_t* method = reinterpret_cast<method_t*>( data );
+
+                if( size >= sizeof( method_t ) )
+                {
+                    rc = enqueue_work( new(method)method_t( std::move( binder ), std::forward<TArg1>( a ), std::forward<TArgs>( args )... ) );
+                }
+            }
+
+            unlock();
+        }
+
+        return rc;
     }
 
 };

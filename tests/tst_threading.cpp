@@ -93,20 +93,23 @@ private:
         active.unlock_shared();
     }
 
-    RC get_storage(size_t size,void** pp)
+    RC get_storage(size_t* size,void** data)
     {
-        if(size > mem_pool_t::max_item_size)
+        if(*size > mem_pool_t::max_item_size)
         {
-            *pp = nullptr;
+            *data = nullptr;
+            *size = mem_pool_t::max_item_size;
             return e_invalid_argument(1,"Pushing too much data.");
         }
+
+        *size = mem_pool_t::max_item_size;
 
         //         CBREx( size <= mem_pool::max_item_size, e_invalid_argument(2,"value must be non-null") );
         //         CBREx( pp != nullptr,                   e_invalid_argument(2,"value must be non-null") );
 
-        *pp = mem.acquire();
+        *data = mem.acquire();
 
-        if(!*pp)
+        if(!*data)
         {
             return e_out_of_memory();
         }
@@ -315,13 +318,12 @@ void t_function(T t)
 std::array<size_t,9> p10 = { {1ull, 10ull, 100ull, 1000ull, 10000ull, 100000ull, 1000000ull, 10000000ull, 100000000ull} };
 void tst_rvalue_transfers(i_marshal_work* p)
 {
+    std::atomic_size_t pending;
+    std::array<ptrdiff_t, 9> rvalue_transfers;
     spin_flag lock;
-    
     using lsize_t = std::vector<size_t>;
-    
-    std::array<ptrdiff_t,9> rvalue_transfers;
-    
     lsize_t   complete;
+
     auto join = [&](lsize_t add)
     {
         us_stopwatch_f x;
@@ -336,6 +338,7 @@ void tst_rvalue_transfers(i_marshal_work* p)
         ptrdiff_t b = rvalue_transfers[ add[0] ];
         
         LOG_UNAME("jtst","0x%.16lx Items %11lu %s 0x%.16lx",a,add.size(), a == b ? "==":"!=",b);
+        --pending;
     };
     
     auto inner = [&](lsize_t v1)
@@ -371,7 +374,10 @@ void tst_rvalue_transfers(i_marshal_work* p)
     for(size_t size = 0; size < p10.size(); ++size)
     {
         p->Async( outer, size );
+        ++pending;
     }
+
+    while( pending ) std::this_thread::yield();
 }
 
 

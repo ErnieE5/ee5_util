@@ -168,13 +168,13 @@ private:
 
 public:
     marshal_delegate(TFunction f,TArgs&&...args ) :
-        method( f ), values( std::forward<TArgs>(args)... )
+        method( std::forward<TFunction>(f) ), values( std::forward<TArgs>(args)... )
     {
     }
 
     template<typename...Ta1>
     marshal_delegate(TFunction f,const Ta1&...args ) :
-        method( f ), values( args... )
+        method( std::forward<TFunction>( f ) ), values( args... )
     {
     }
 
@@ -209,14 +209,14 @@ private:
     Delegate call;
 
 public:
-    marshaled_call( TFunction f,TArgs&&...args) :
-        call( f, std::forward<TArgs>(args)... )
+    marshaled_call( TFunction&& f,TArgs&&...args) :
+        call( std::forward<TFunction>(f), std::forward<TArgs>(args)... )
     {
     }
 
     template<typename...Ta1>
-    marshaled_call(TFunction f, const Ta1&...args) :
-        call( f, args... )
+    marshaled_call(TFunction&& f, const Ta1&...args) :
+        call( std::forward<TFunction>( f ), args... )
     {
     }
 

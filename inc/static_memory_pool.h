@@ -76,7 +76,7 @@ const int cache_alignment_intel_x86_64 = 64;
 //
 //
 template< size_t item_size, size_t item_count, size_t align = cache_alignment_intel_x86_64 >
-class static_memory_pool
+class ee5_alignas(64) static_memory_pool
 {
 private:
     // This internal structure is mostly notational to avoid overuse of
@@ -186,9 +186,9 @@ public:
     bool is_valid_pointer(void * buffer)
     {
         return
-        ( reinterpret_cast<pool_buffer*>(buffer) >= &store.front() ) &&
-        ( reinterpret_cast<pool_buffer*>(buffer) <= &store.back()  ) &&
-        ((reinterpret_cast<ptrdiff_t>(buffer) - reinterpret_cast<ptrdiff_t>(store.data())) % sizeof(pool_buffer)) == 0;
+            ( reinterpret_cast<pool_buffer*>( buffer ) >= &store.front() ) &&
+            ( reinterpret_cast<pool_buffer*>( buffer ) <= &store.back() );// &&
+        //((reinterpret_cast<ptrdiff_t>(buffer) - reinterpret_cast<ptrdiff_t>(store.data())) % sizeof(pool_buffer)) == 0;
     }
 
 
