@@ -255,7 +255,11 @@ public:
             if( rc == s_ok() )
             {
                 void* b = data;
-                binder_t  binder( f, marshal_allocator<binder_t>(&size,&b) );
+#ifdef _MSC_VER
+                binder_t  binder( std::allocator_arg_t(), marshal_allocator<binder_t>( &size, &b ), f );
+#else
+                binder_t  binder( f );
+#endif
                 method_t* method = reinterpret_cast<method_t*>( data );
 
                 if( size >= sizeof( method_t ) )
