@@ -167,7 +167,7 @@ public:
     RC Async(O* pO, void (O::*pM)(typename ref_val<TArgs>::type...),TArgs&&...args)
     {
         using binder_t = object_method_delegate<O,void,typename ref_val<TArgs>::type...>;
-        using method_t = marshaled_call<binder_t,typename std::remove_reference<TArgs>::type...>;
+        using method_t = marshaled_call<binder_t,typename std::decay<TArgs>::type...>;
 
         return __enqueue<binder_t,method_t>( binder_t(pO,pM), std::forward<TArgs>(args)... );
     }
@@ -176,14 +176,14 @@ public:
     // Call a member function of a class in the context of a thread pool thread
     // with zero or more arguments that are constant lvalue types
     //
-    template<typename O, typename...TArgs>
-    RC Async( O* pO, void ( O::*pM )( typename ref_val<TArgs>::type... ), TArgs&...args )
-    {
-        using binder_t = object_method_delegate<O,void,typename ref_val<TArgs>::type...>;
-        using method_t = marshaled_call<binder_t,typename std::remove_reference<TArgs>::type...>;
+    //template<typename O, typename...TArgs>
+    //RC Async( O* pO, void ( O::*pM )( typename ref_val<TArgs>::type... ),const TArgs&...args )
+    //{
+    //    using binder_t = object_method_delegate<O,void,typename ref_val<TArgs>::type...>;
+    //    using method_t = marshaled_call<binder_t,typename std::remove_reference<TArgs>::type...>;
 
-        return __enqueue<binder_t,method_t>( binder_t(pO,pM), std::forward<TArgs>(args)... );
-    }
+    //    return __enqueue<binder_t,method_t>( binder_t(pO,pM), std::forward<TArgs>(args)... );
+    //}
 
     template<typename F>
     struct VoidVoid : public i_marshaled_call
@@ -195,9 +195,6 @@ public:
             func();
         }
     };
-
-    template<typename...TArgs>
-    using FuncPtr = void(*)( typename ref_val<TArgs>::type... );
 
 
     // Call any function or functor that can compile to a void(void) signature

@@ -31,12 +31,12 @@ BNS( ee5 )
 // object into a single entity that acts like a function call.
 //
 //
-template<typename TObject,typename TReturn,typename...TArgs>
+template<typename TObject, typename TReturn, typename...TArgs>
 class object_method_delegate
 {
 public:
     typedef TObject*            PObject;
-    typedef TReturn (TObject::* PMethod )(TArgs...);
+    typedef TReturn( TObject::* PMethod )( TArgs... );
 
 private:
     PObject object;
@@ -44,27 +44,27 @@ private:
 
 protected:
 public:
-    object_method_delegate(TObject* pO,PMethod pM) :
-        object(pO),
-        method(pM)
+    object_method_delegate( TObject* pO, PMethod pM ) :
+        object( pO ),
+        method( pM )
     {
     }
 
-    object_method_delegate(object_method_delegate&& _o) :
-        object(_o.object),
-        method(_o.method)
+    object_method_delegate( object_method_delegate&& _o ) :
+        object( _o.object ),
+        method( _o.method )
     {
     }
 
-    object_method_delegate(const object_method_delegate& _o) :
-        object(_o.object),
-        method(_o.method)
+    object_method_delegate( const object_method_delegate& _o ) :
+        object( _o.object ),
+        method( _o.method )
     {
     }
 
-    TReturn operator()(TArgs...args)
+    TReturn operator()( TArgs&&...args )
     {
-        return (object->*method)(args...);
+        return ( object->*method )( std::move( args )... );
     }
 };
 
@@ -142,18 +142,18 @@ public:
 template<typename TFunction, typename TReturn, typename ...TArgs>
 class marshal_delegate
 {
-    public:
-    static const size_t argument_count = sizeof...(TArgs);
+public:
+    static const size_t argument_count = sizeof...( TArgs );
 
 private:
-    template<int...>        struct sequence                        {};
-    template<int N,int...S> struct unpacker:unpacker<N-1,N-1,S...> {};
-    template<int...S>       struct unpacker<0,S...>
+    template<int...>         struct sequence { };
+    template<int N, int...S> struct unpacker :unpacker < N - 1, N - 1, S... > { };
+    template<int...S>       struct unpacker < 0, S... >
     {
         typedef sequence<S...> type;
     };
 
-    using storage_t = std::tuple<typename std::remove_reference<TArgs>::type...>;
+    using storage_t = std::tuple < typename std::remove_reference<TArgs>::type... > ;
     using unpack_t  = typename unpacker<argument_count>::type;
 
     TFunction   method;
@@ -162,24 +162,24 @@ private:
     template<int...S>
     TReturn tuple_call( sequence<S...> )
     {
-        return method( std::move( std::get<S>(values) )... );
+        return method( std::move( std::get<S>( values ) )... );
     }
 
 
 public:
-    marshal_delegate(TFunction f,TArgs&&...args ) :
-        method( std::forward<TFunction>(f) ), values( std::forward<TArgs>(args)... )
+    marshal_delegate( TFunction f, TArgs&&...args ) :
+        method( std::forward<TFunction>( f ) ), values( std::forward<TArgs>( args )... )
     {
     }
 
     template<typename...Ta1>
-    marshal_delegate(TFunction f,const Ta1&...args ) :
-        method( std::forward<TFunction>( f ) ), values( args... )
+    marshal_delegate( TFunction f, const Ta1&...args ) :
+        method( std::forward<TFunction>( f ) ), values( std::forward<TArgs>( args )... )
     {
     }
 
-    marshal_delegate(const marshal_delegate& _o) :
-        method(_o.method), values(_o.values)
+    marshal_delegate( marshal_delegate&& _o ) :
+        method( std::move( _o.method ) ), values( std::move( _o.values ) )
     {
     }
 
@@ -199,7 +199,7 @@ public:
 // be possible to make this a base class and use multiple inheritance, but the clang front end
 // and LLVM back-end do an exceptional job of making most of this disappear.
 //
-template<typename TFunction,typename ...TArgs>
+template<typename TFunction, typename ...TArgs>
 class marshaled_call : public i_marshaled_call
 {
 public:
@@ -209,14 +209,14 @@ private:
     Delegate call;
 
 public:
-    marshaled_call( TFunction&& f,TArgs&&...args) :
-        call( std::forward<TFunction>(f), std::forward<TArgs>(args)... )
+    marshaled_call( TFunction&& f, TArgs&&...args ) :
+        call( std::forward<TFunction>( f ), std::forward<TArgs>( args )... )
     {
     }
 
     template<typename...Ta1>
-    marshaled_call(TFunction&& f, const Ta1&...args) :
-        call( std::forward<TFunction>( f ), args... )
+    marshaled_call( TFunction&& f, Ta1&...args ) :
+        call( std::forward<TFunction>( f ), std::forward<Ta1>( args )... )
     {
     }
 
@@ -253,8 +253,12 @@ private:
     std::function< void() > call;
 protected:
 public:
-    marshaled_call( const std::function< void() >& c) : call(c) {}
-    ~marshaled_call() {}
+    marshaled_call( const std::function< void() >& c ) : call( c )
+    {
+    }
+    ~marshaled_call()
+    {
+    }
 
     virtual void Execute()
     {
