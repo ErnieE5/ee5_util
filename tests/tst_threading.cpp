@@ -558,6 +558,7 @@ RC FunctionTests()
     }
     LOG_ALWAYS("Phase Two Complete... %5.3lf ms",t2a.delta<std::milli>());
 #endif
+
     tst_rvalue_transfers(&tp);
 
     while(tp.Pending()) { /*LOG_ALWAYS("Pending...%lu",tp.Pending());*/ std::this_thread::sleep_for(std::chrono::milliseconds(1)); }
