@@ -314,8 +314,84 @@ void t_function(T t)
 }
 
 
-
 std::array<size_t,9> p10 = { {1ull, 10ull, 100ull, 1000ull, 10000ull, 100000ull, 1000000ull, 10000000ull, 100000000ull} };
+struct rvalue_test
+{
+    std::atomic_size_t pending;
+    std::array<ptrdiff_t, 9> rvalue_transfers;
+    spin_flag lock;
+    using lsize_t = std::vector<size_t>;
+    lsize_t   complete;
+
+    
+    void join(lsize_t add)
+    {
+        us_stopwatch_f x;
+        framed_lock( lock, [&]()
+        {
+            LOG_UNAME("jtst","0x%.16lx Items %11lu  Time: %12.0f us join delay", add.data(),add.size(),x.delta());
+            complete.push_back( add.size() );
+        });
+        LOG_UNAME("jtst","0x%.16lx Items %11lu  Time: %12.0f us join", add.data(),add.size(),x.delta());
+        
+        ptrdiff_t a = reinterpret_cast<ptrdiff_t>(add.data());
+        ptrdiff_t b = rvalue_transfers[ add[0] ];
+        
+        LOG_UNAME("jtst","0x%.16lx Items %11lu %s 0x%.16lx",a,add.size(), a == b ? "==":"!=",b);
+        --pending;
+    }
+    
+    void inner(lsize_t v1)
+    {
+        us_stopwatch_f t;
+        std::generate(v1.begin()+1,v1.end(), []()->size_t{ return std::rand(); });
+        LOG_UNAME("jtst","0x%.16lx Items %11lu  Time: %12.0f us inner", v1.data(),v1.size(),t.delta());
+        
+        p->Async( this, &rvalue_test::join, std::move(v1) );
+    }
+    
+    void outer(size_t num)
+    {
+        us_stopwatch_f t;
+        
+        lsize_t v( p10[num] );
+        
+        v[0] = num;
+        
+        rvalue_transfers[num] = reinterpret_cast<ptrdiff_t>(v.data());
+        
+        size_t* addr = v.data();
+        
+        p->Async( this, &rvalue_test::inner, std::move(v) );
+        
+        LOG_UNAME("jtst","0x%.16lx Items %11lu  Time: %12.0f us outer",      addr,     p10[num], t.delta() );
+        //        LOG_UNAME("fart ","0x%.16lx Items %11lu  Time: %12.0f us outer post", v.data(), size, t.delta() );
+    };
+
+    i_marshal_work* p;
+    
+    rvalue_test(i_marshal_work* _p) : p(_p)
+    {
+        pending = 0;
+    
+        // This test "adds" more time by creating a large amount of work
+        // by doing "heap stuff" on a number of threads.
+        //
+        for(size_t size = 0; size < p10.size(); ++size)
+        {
+            p->Async( this, &rvalue_test::outer, size );
+            ++pending;
+        }
+        
+        while( pending ) { std::this_thread::yield(); }
+    }
+    
+};
+
+
+
+
+
 void tst_rvalue_transfers(i_marshal_work* p)
 {
     std::atomic_size_t pending;
@@ -323,6 +399,8 @@ void tst_rvalue_transfers(i_marshal_work* p)
     spin_flag lock;
     using lsize_t = std::vector<size_t>;
     lsize_t   complete;
+    
+    pending = 0;
 
     auto join = [&](lsize_t add)
     {
@@ -377,7 +455,7 @@ void tst_rvalue_transfers(i_marshal_work* p)
         ++pending;
     }
 
-    while( pending ) std::this_thread::yield();
+    while( pending ) { std::this_thread::yield(); }
 }
 
 
@@ -565,7 +643,17 @@ RC FunctionTests()
     LOG_ALWAYS("Phase Two Complete... %5.3lf ms",t2a.delta<std::milli>());
 #endif
 
+    us_stopwatch_s tlambda;
     tst_rvalue_transfers(&tp);
+    size_t lambdas = tlambda.delta();
+    
+    us_stopwatch_s tpmf;
+    rvalue_test x(&tp);
+    size_t pmftime = tpmf.delta();
+    
+    LOG_ALWAYS("Labmda's   :%lu us",lambdas);
+    LOG_ALWAYS("PMF's      :%lu us",pmftime);
+    
 
     while(tp.Pending()) { /*LOG_ALWAYS("Pending...%lu",tp.Pending());*/ std::this_thread::sleep_for(std::chrono::milliseconds(1)); }
 
