@@ -243,17 +243,17 @@ struct ThreadpoolTest
     }
 
     template<typename C>
-    void TemplateRef( const C& items )
+    void TemplateRef( C items )
     {
         LOG_ALWAYS( "(%zu)--", items.size() );
     }
 
-    void ScalarAndReference( int a, double b, std::list<int>& l )
+    void ScalarAndContainer( int a, double b, std::list<int> l )
     {
         LOG_ALWAYS( "(%zu) a:%i b:%g --", l.size(), a, b );
     }
 
-    void String( std::string& s )
+    void String( std::string s )
     {
         LOG_ALWAYS( "s:%s", s.c_str() );
     }
@@ -325,8 +325,10 @@ struct rvalue_test
 {
     using lsize_t = std::vector < size_t > ;
 
+    ee5_alignas(64)
     std::atomic_size_t          pending;
     std::array<ptrdiff_t, 9>    rvalue_transfers;
+    ee5_alignas( 64 )
     spin_flag                   lock;
     lsize_t                     complete;
 
@@ -384,7 +386,6 @@ struct rvalue_test
         // by doing "heap stuff" on a number of threads.
         //
         for(size_t size = 0; size < p10.size(); ++size)
-        //size_t size = 8;
         {
             p->Async( this, &rvalue_test::outer, size );
             ++pending;
@@ -404,8 +405,10 @@ struct rvalue_test
 
 void tst_rvalue_transfers( i_marshal_work* p )
 {
+    ee5_alignas( 64 )
     std::atomic_size_t pending;
     std::array<ptrdiff_t, 9> rvalue_transfers;
+    ee5_alignas( 64 )
     spin_flag lock;
     using lsize_t = std::vector < size_t > ;
     lsize_t   complete;
@@ -459,7 +462,6 @@ void tst_rvalue_transfers( i_marshal_work* p )
     // by doing "heap stuff" on a number of threads.
     //
     for(size_t size = 0; size < p10.size(); ++size)
-    //size_t size = 8;
     {
         p->Async( outer, size );
         ++pending;
@@ -472,6 +474,86 @@ void tst_rvalue_transfers( i_marshal_work* p )
 }
 
 
+template <class T>
+struct marshal_allocator
+{
+    typedef T               value_type;
+    typedef T*              pointer;
+    typedef const T*        const_pointer;
+    typedef T&              reference;
+    typedef const T&        const_reference;
+    typedef std::size_t     size_type;
+    typedef std::ptrdiff_t  difference_type;
+
+    template<typename O> struct rebind
+    {
+        typedef marshal_allocator<O> other;
+    };
+
+    void**  data;
+    size_t* size;
+
+    marshal_allocator()
+    {
+    }
+
+    marshal_allocator(size_t* s,void** d)
+    {
+        size = s;
+        data = d;
+    };
+
+    marshal_allocator(const marshal_allocator& o)
+    {
+        size = o.size;
+        data = o.data;
+    };
+
+    template< class O >
+    marshal_allocator(const marshal_allocator<O>& o)
+    {
+        size = o.size;
+        data = o.data;
+    };
+
+
+    template< class A, class... Args >
+    void construct( A* item, Args&&... args )
+    {
+        ::new( reinterpret_cast<void*>( item ) ) A( std::forward<Args>( args )... );
+    }
+    void destroy( T* item)
+    {
+        if( item )
+        {
+            item->~T();
+        }
+    }
+
+    T* allocate( size_type n, const_pointer hint = 0 )
+    {
+        T* ret = nullptr;
+        size_t a = n * sizeof( T );
+        if( *size > a )
+        {
+            ret = reinterpret_cast<T*>( ( reinterpret_cast<char*>( *data ) + *size - a ) );
+//            *data = ( reinterpret_cast<char*>( *data ) + *size - a );
+            *size -= a;
+            
+        }
+
+        return ret;
+    }
+    void deallocate( T* p, size_type n )
+    {
+
+    };
+};
+
+template <class T, class U>
+bool operator==( const marshal_allocator<T>&, const marshal_allocator<U>& );
+template <class T, class U>
+bool operator!=( const marshal_allocator<T>&, const marshal_allocator<U>& );
 
 
 
@@ -494,7 +576,23 @@ RC FunctionTests()
 
     TP& p = tp;
 
-#if 0
+    us_stopwatch_s tlambda;
+    tst_rvalue_transfers( &tp );
+    size_t lambdas = tlambda.delta();
+
+    us_stopwatch_s tpmf;
+    rvalue_test x( &tp );
+    size_t pmftime = tpmf.delta();
+
+    LOG_ALWAYS( "Labmda's   :%lu us", lambdas );
+    LOG_ALWAYS( "PMF's      :%lu us", pmftime );
+
+    while( tp.Pending() )
+    {
+        std::this_thread::yield();
+    }
+    return s_ok();
+
     // Scalar Types
     //
     CRR( p.Async( &target, &ThreadpoolTest::ScalarTypes, 1, 11.1, size_t(1000000000000000ull) ) );
@@ -512,9 +610,12 @@ RC FunctionTests()
 
     // RValue Forwarding to marshaling class
     //
-    //CRR( p.Async( &target, &ThreadpoolTest::TemplateRef, std::list<double>( { 1.1, 1.2, 1.3, 1.4, 1.5, 1.6 } ) ) );
-    //CRR( p.Async( &target, &ThreadpoolTest::TemplateRef, std::vector<int>(  { 1, 2, 3, 4, 5 } )                ) );
+    CRR( p.Async( &target, &ThreadpoolTest::TemplateRef, std::list<double>( { 1.1, 1.2, 1.3, 1.4, 1.5, 1.6 } ) ) );
+    CRR( p.Async( &target, &ThreadpoolTest::TemplateRef, std::vector<int>(  { 1, 2, 3, 4, 5 } )                ) );
     CRR( p.Async( &target, &ThreadpoolTest::String,      std::string("Ernie")                                  ) );
+
+    std::string s1( "Foo" );
+    CRR( p.Async( &target, &ThreadpoolTest::String, s1 ) );
 
 
     // LValue Reference / Template
@@ -526,7 +627,7 @@ RC FunctionTests()
     // Mixed Scaler Types and LValue Reference
     //
     std::list<int> li( { 1, 2, 3, 4, 5, 6 } );
-    CRR( p.Async( &target, &ThreadpoolTest::ScalarAndReference, 1, 1.1, li ) );
+    CRR( p.Async( &target, &ThreadpoolTest::ScalarAndContainer, 1, 1.1, std::move(li) ) );
 
 
     // Template Member Calls
@@ -540,10 +641,10 @@ RC FunctionTests()
 
     // Scaler Types as references
     //
-    CRR( p.Async( &target, &ThreadpoolTest::ScalarTypes, int_local ,double_local, sizeof(unsigned)           ) );
-    CRR( p.Async( &target, &ThreadpoolTest::ScalarTypes, int_local ,double_local, sizeof(size_t)             ) );
-    CRR( p.Async( &target, &ThreadpoolTest::ScalarTypes, int_local ,double_local, sizeof(unsigned long)      ) );
-    CRR( p.Async( &target, &ThreadpoolTest::ScalarTypes, int_local ,double_local, sizeof(unsigned long long) ) );
+    //CRR( p.Async( &target, &ThreadpoolTest::ScalarTypes, int_local ,double_local, sizeof(unsigned)           ) );
+    //CRR( p.Async( &target, &ThreadpoolTest::ScalarTypes, int_local ,double_local, sizeof(size_t)             ) );
+    //CRR( p.Async( &target, &ThreadpoolTest::ScalarTypes, int_local ,double_local, sizeof(unsigned long)      ) );
+    //CRR( p.Async( &target, &ThreadpoolTest::ScalarTypes, int_local ,double_local, sizeof(unsigned long long) ) );
 
 
     int h = 0;  // This value is just used for lambda capture testing in the following
@@ -654,29 +755,11 @@ RC FunctionTests()
         while( s_ok() != rc );
     }
     LOG_ALWAYS( "Phase Two Complete... %5.3lf ms", t2a.delta<std::milli>() );
-#endif
-
-
-    tst_rvalue_transfers( &tp );
-
-    us_stopwatch_s tlambda;
-    tst_rvalue_transfers( &tp );
-    size_t lambdas = tlambda.delta();
-
-    LOG_ALWAYS( "", "" );
-
-    us_stopwatch_s tpmf;
-    rvalue_test x( &tp );
-    size_t pmftime = tpmf.delta();
-
-
-
-    LOG_ALWAYS( "Labmda's   :%lu us", lambdas );
-    LOG_ALWAYS( "PMF's      :%lu us", pmftime );
 
 
     while( tp.Pending() )
-    { /*LOG_ALWAYS("Pending...%lu",tp.Pending());*/ std::this_thread::sleep_for( std::chrono::milliseconds( 1 ) );
+    {
+        std::this_thread::yield();
     }
 
     //     assert( cc == 7777777 );

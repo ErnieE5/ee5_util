@@ -69,7 +69,6 @@ public:
 };
 
 
-
 //-------------------------------------------------------------------------------------------------
 // This template acts as storage for an action that needs to be marshaled or stored for a duration.
 // Once the marshaling process has taken place, the target of the action is invoked by calling the
@@ -148,10 +147,7 @@ public:
 private:
     template<int...>         struct sequence { };
     template<int N, int...S> struct unpacker :unpacker < N - 1, N - 1, S... > { };
-    template<int...S>       struct unpacker < 0, S... >
-    {
-        typedef sequence<S...> type;
-    };
+    template<int...S>        struct unpacker < 0, S... > { typedef sequence<S...> type; };
 
     using storage_t = std::tuple < typename std::remove_reference<TArgs>::type... > ;
     using unpack_t  = typename unpacker<argument_count>::type;
@@ -165,7 +161,6 @@ private:
         return method( std::move( std::get<S>( values ) )... );
     }
 
-
 public:
     marshal_delegate( TFunction f, TArgs&&...args ) :
         method( std::forward<TFunction>( f ) ), values( std::forward<TArgs>( args )... )
@@ -178,17 +173,11 @@ public:
     {
     }
 
-    marshal_delegate( marshal_delegate&& _o ) :
-        method( std::move( _o.method ) ), values( std::move( _o.values ) )
-    {
-    }
-
     inline TReturn operator()()
     {
         return tuple_call( unpack_t() );
     }
 };
-
 
 
 
@@ -209,6 +198,7 @@ private:
     Delegate call;
 
 public:
+
     marshaled_call( TFunction&& f, TArgs&&...args ) :
         call( std::forward<TFunction>( f ), std::forward<TArgs>( args )... )
     {
@@ -234,26 +224,17 @@ public:
 
 
 //-------------------------------------------------------------------------------------------------
-// Specialization for the "void f(void)" case of either a standard C function OR
-// a void lambda. []{ }
-//
-// If you use the void lambda and have captures, be aware of the lifetime of the variables.
-// Reference captures in a class may have a lifetime that stays around, but in a function it is
-// HIGHLY unlikely that a reference will remain valid by the time the lambda is executed when used
-// to queue stuff on another thread.  Manage the object lifetime accordingly! If you come from a
-// C#/Java background you will have some very unpleasant surprises if you don't!
-//
-// The specialization exists to save a bit of storage and because of "interesting" ambiguity
-// that occurs when you have a zero length argument pack.
+// Specialization for the "void f(void)" case of a standard C function
 //
 template<>
-class marshaled_call< std::function< void() > > : public i_marshaled_call
+class marshaled_call< void(*)(void) > : public i_marshaled_call
 {
 private:
-    std::function< void() > call;
+    using void_void = void(*)( );
+    void (*call)(void);
 protected:
 public:
-    marshaled_call( const std::function< void() >& c ) : call( c )
+    marshaled_call( const void_void& c ) : call( c )
     {
     }
     ~marshaled_call()
