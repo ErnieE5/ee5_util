@@ -29,7 +29,7 @@ BNS( ee5 )
 // is sitting in the tuple that acts as storage.
 //
 template<typename Arg>
-struct ref_val
+struct move_value
 {
     using type = typename std::conditional<
         /* if */    std::is_scalar<             typename std::decay<Arg>::type >::value || 
@@ -39,6 +39,18 @@ struct ref_val
         /* else */  typename std::add_lvalue_reference<Arg>::type
     >::type;
 };
+
+
+template<typename Arg>
+struct copy_value
+{
+    using type = typename std::conditional<
+        /* if */    std::is_scalar<typename std::decay<Arg>::type >::value,
+        /* then */  typename std::decay<Arg>::type,
+        /* else */  typename std::add_lvalue_reference<Arg>::type
+    >::type;
+};
+
 
 
 //---------------------------------------------------------------------------------------------------------------------
@@ -51,7 +63,7 @@ class i_marshal_work
 private:
     virtual bool    lock()                                  = 0;
     virtual void    unlock()                                = 0;
-    virtual RC      get_storage(size_t* size,void** data)   = 0;
+    virtual RC      get_storage(size_t size,void** data)    = 0;
     virtual RC      enqueue_work(i_marshaled_call *)        = 0;
 
     template< typename B, typename M, typename...TArgs >
@@ -62,9 +74,7 @@ private:
 
         if( lock() )
         {
-            size_t size = sizeof( M );
-
-            rc = get_storage( &size, reinterpret_cast<void**>(&call) );
+            rc = get_storage( sizeof( M ), reinterpret_cast<void**>( &call ) );
 
             if( rc == s_ok() )
             {
@@ -82,22 +92,22 @@ public:
     // with zero or more arguments with rvalue semantics.
     //
     template<typename O, typename...TArgs>
-    RC Async(O* pO, void (O::*pM)(typename ref_val<TArgs>::type...),TArgs&&...args)
+    RC Async( O* pO, void ( O::*pM )( typename move_value<TArgs>::type... ), TArgs&&...args )
     {
-        using binder_t = object_method_delegate<O,void,typename ref_val<TArgs>::type...>;
+        using binder_t = object_method_delegate<O, void, typename move_value<TArgs>::type...>;
         using method_t = marshaled_call<binder_t,typename std::decay<TArgs>::type...>;
 
         return __enqueue<binder_t,method_t>( binder_t(pO,pM), std::forward<TArgs>(args)... );
     }
     
     
-    // Call a member function of a class in the context of a thread pool thread
-    // with zero or more arguments that are constant lvalue types
+    // 
+    // 
     //
     template<typename O, typename...TArgs>
-    RC Async( O* pO, void ( O::*pM )( typename ref_val<TArgs>::type... ),const TArgs&...args )
+    RC AsyncByVal( O* pO, void ( O::*pM )( typename copy_value<TArgs>::type... ), TArgs...args )
     {
-        using binder_t = object_method_delegate<O,void,typename ref_val<TArgs>::type...>;
+        using binder_t = object_method_delegate<O, void, typename copy_value<TArgs>::type...>;
         using method_t = marshaled_call<binder_t,typename std::decay<TArgs>::type...>;
 
         return __enqueue<binder_t,method_t>( binder_t(pO,pM), std::forward<TArgs>(args)... );
@@ -114,11 +124,11 @@ public:
     }
 
 
-    // This is a little of a mess. In order to support lambda expressions
-    // We need to distinguish between the pointer to a member function and the first argument of the lambda.
+    // This is a little of a mess. In order to support lambda expressions we need to distinguish 
+    // between the pointer to a member function and the first argument of the lambda.
     // This has the "messed up" side effect that a lambda expression can not pass a pointer to a
-    // member function as the first argument.  This restriction is because the compiler won't be able to
-    // disambiguate between this use and the O*->Member(...) usage.
+    // member function as the first argument.  This restriction is because the compiler won't be 
+    // able to disambiguate between this use and the O*->Member(...) usage.
     //
     template<
         typename    TFunction,  // Any expression that evaluates to a "plain" function call with at
@@ -143,7 +153,7 @@ public:
     >
     RC Async(TFunction f,TArg1&& a,TArgs&&...args)
     {
-        using method_t = marshaled_call<TFunction, typename ref_val<TArg1>::type, typename ref_val<TArgs>::type...>;
+        using method_t = marshaled_call<TFunction, typename move_value<TArg1>::type, typename move_value<TArgs>::type...>;
 
         return __enqueue<TFunction, method_t>( std::forward<TFunction>( f ), std::forward<TArg1>( a ), std::forward<TArgs>( args )... );
     }

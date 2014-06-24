@@ -99,28 +99,17 @@ private:
         active.unlock_shared();
     }
 
-    RC get_storage( size_t* size, void** data )
+    RC get_storage( size_t size, void** data )
     {
-        if( *size > mem_pool_t::max_item_size )
-        {
-            *data = nullptr;
-            *size = mem_pool_t::max_item_size;
-            return e_invalid_argument( 1, "Pushing too much data." );
-        }
-
-        *size = mem_pool_t::max_item_size;
-
-        //         CBREx( size <= mem_pool::max_item_size, e_invalid_argument(2,"value must be non-null") );
-        //         CBREx( pp != nullptr,                   e_invalid_argument(2,"value must be non-null") );
+        CBREx( size <= mem_pool_t::max_item_size, e_to_large( mem_pool_t::max_item_size, "request is larger than pool size" ) );
+        CBREx( data != nullptr,                   e_invalid_argument(2,"value must be non-null") );
 
         *data = mem.acquire();
 
         if( !*data )
         {
-            return e_out_of_memory();
+            return e_pool_empty();
         }
-
-        //        ++c;
 
         return s_ok();
     }
@@ -239,21 +228,26 @@ struct ThreadpoolTest
 
     void ScalarTypes( int a, double b, size_t c )
     {
-        LOG_ALWAYS( "a: %i b:%g c:%zu", a, b, c );
+        LOG_ALWAYS( "a: %i b:%g c:%lu", a, b, c );
     }
 
     template<typename C>
-    void TemplateRef( C items )
+    void TemplateRef( C& items )
     {
-        LOG_ALWAYS( "(%zu)--", items.size() );
+        LOG_ALWAYS( "(%lu)--", items.size() );
     }
 
     void ScalarAndContainer( int a, double b, std::list<int> l )
     {
-        LOG_ALWAYS( "(%zu) a:%i b:%g --", l.size(), a, b );
+        LOG_ALWAYS( "(%lu) a:%i b:%g --", l.size(), a, b );
     }
 
-    void String( std::string s )
+    void CopyString( std::string& s )
+    {
+        LOG_ALWAYS( "s:%s", s.c_str() );
+    }
+
+    void MoveString( std::string s )
     {
         LOG_ALWAYS( "s:%s", s.c_str() );
     }
@@ -276,19 +270,7 @@ struct ThreadpoolTest
 
     void CalcFactorial( size_t n )
     {
-        us_stopwatch_d taft;
-
-        for( size_t h = n; h > 2; h-- )
-        {
-            //tp.Async( [&](size_t h)
-            //{
-            //    long double v = Factorial( h );
-            //    framed_lock( lock, [&] { total+=v; } );
-            //}, h );
-        }
-
-
-        LOG_ALWAYS( "n: %2lu value: %26.0Lf %8lu us", n, Factorial( n ), taft.delta<std::micro>() );
+        LOG_ALWAYS( "n: %2lu value: %26.0Lf", n, Factorial( n ) );
     }
 
 };
@@ -303,7 +285,7 @@ struct ThreadpoolTest
 //
 void c_function( size_t y )
 {
-    LOG_ALWAYS( "y:%zu", y );
+    LOG_ALWAYS( "y:%lu", y );
 }
 
 
@@ -576,22 +558,24 @@ RC FunctionTests()
 
     TP& p = tp;
 
-    us_stopwatch_s tlambda;
-    tst_rvalue_transfers( &tp );
-    size_t lambdas = tlambda.delta();
-
     us_stopwatch_s tpmf;
     rvalue_test x( &tp );
     size_t pmftime = tpmf.delta();
 
-    LOG_ALWAYS( "Labmda's   :%lu us", lambdas );
-    LOG_ALWAYS( "PMF's      :%lu us", pmftime );
+    us_stopwatch_s tlambda;
+    tst_rvalue_transfers( &tp );
+    size_t lambdas = tlambda.delta();
+
+    LOG_UNAME( "jtst", "Labmda's   :%lu us", lambdas );
+    LOG_UNAME( "jtst", "PMF's      :%lu us", pmftime );
 
     while( tp.Pending() )
     {
         std::this_thread::yield();
     }
-    return s_ok();
+
+    p.Async( [](){ LOG_ALWAYS( "", "" ); } );
+//    return s_ok();
 
     // Scalar Types
     //
@@ -599,7 +583,7 @@ RC FunctionTests()
 
     // Factorial Work Product
     //
-    for(size_t n=0;n<26;++n)
+    for(size_t n=1;n<26;++n)
     {
         CRR( p.Async( &target, &ThreadpoolTest::CalcFactorial, n ) );
     }
@@ -608,23 +592,20 @@ RC FunctionTests()
     //
     CRR( p.Async( &target, &ThreadpoolTest::NineArgs, 1, 2, 3, 4, 5, 6, 7, 8, 9 ) );
 
-    // RValue Forwarding to marshaling class
-    //
-    CRR( p.Async( &target, &ThreadpoolTest::TemplateRef, std::list<double>( { 1.1, 1.2, 1.3, 1.4, 1.5, 1.6 } ) ) );
-    CRR( p.Async( &target, &ThreadpoolTest::TemplateRef, std::vector<int>(  { 1, 2, 3, 4, 5 } )                ) );
-    CRR( p.Async( &target, &ThreadpoolTest::String,      std::string("Ernie")                                  ) );
 
     std::string s1( "Foo" );
-    CRR( p.Async( &target, &ThreadpoolTest::String, s1 ) );
-
-
-    // LValue Reference / Template
-    //
     std::vector<double> dv( { 10.1, 10.2, 10.3, 10.4, 10.5, 10.6, 10.7, 10.8, 10.9 } );
-    //CRR( p.Async( &target, &ThreadpoolTest::TemplateRef, dv ) );
+
+    CRR( p.AsyncByVal( &target, &ThreadpoolTest::TemplateRef, std::list<double>( { 1.1, 1.2, 1.3, 1.4, 1.5, 1.6 } ) ) );
+    CRR( p.AsyncByVal( &target, &ThreadpoolTest::TemplateRef, std::vector<int>(  { 1, 2, 3, 4, 5 } )                ) );
+    CRR( p.AsyncByVal( &target, &ThreadpoolTest::TemplateRef, dv                                                    ) );
+
+    CRR( p.AsyncByVal( &target, &ThreadpoolTest::CopyString, s1 ) );
 
 
-    // Mixed Scaler Types and LValue Reference
+    CRR( p.Async( &target, &ThreadpoolTest::MoveString, std::string( "Ernie" ) ) );
+
+    // 
     //
     std::list<int> li( { 1, 2, 3, 4, 5, 6 } );
     CRR( p.Async( &target, &ThreadpoolTest::ScalarAndContainer, 1, 1.1, std::move(li) ) );
@@ -676,8 +657,8 @@ RC FunctionTests()
 
 
     ee5_alignas( 128 )
-        std::atomic_ulong cc;   // This value is used to sum the number of calls to the lambda "q"
-    // and is done via a capture. The sum at the end of the test should
+    std::atomic_ulong cc;   // This value is used to sum the number of calls to the lambda "q"
+                            // and is done via a capture. The sum at the end of the test should
     cc = 0;                 // be equal to 7777777.
 
     // Lambda capture with three scalar arguments called locally
@@ -685,14 +666,12 @@ RC FunctionTests()
     //
     auto q = [&cc](size_t a,double b)
     {
-        //        us_stopwatch_s sw;
         long double ld = std::rand() * b;
 
         for(size_t i = 0;i < 10000;i++)
         {
             ld += ThreadpoolTest::Factorial(25);
         }
-        //        printf("yyyyy %lu\n",sw.delta());
 
         // This should never happen, but the optimizer is too good
         // and will completely compile this code away if there is
@@ -702,8 +681,6 @@ RC FunctionTests()
         {
             LOG_UNAME("Lambda q","ld: %20.20lg",ld);
         }
-
-        //LOG_UNAME("Lambda q","%lu", sw.delta() );
 
         cc++; // The atomically incremented value
     };
@@ -731,8 +708,7 @@ RC FunctionTests()
             rc = p.Async( q, 3, g*.3 );
             if(rc!=s_ok())
             {
-                printf("%lx ,%lu\n",rc,g);
-                std::this_thread::sleep_for( std::chrono::milliseconds( 1000 ) );
+                std::this_thread::yield();
             }
         }
         while( s_ok() != rc );
@@ -748,8 +724,7 @@ RC FunctionTests()
             rc = p.Async( q, 4, g*.4 );
             if(rc!=s_ok())
             {
-                printf("%lx ,%lu\n",rc,g);
-                std::this_thread::sleep_for( std::chrono::milliseconds( 1000 ) );
+                std::this_thread::yield();
             }
         }
         while( s_ok() != rc );
