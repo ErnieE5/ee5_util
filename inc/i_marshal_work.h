@@ -33,7 +33,7 @@ struct ref_val
 {
     using type = typename std::conditional<
         /* if */    std::is_scalar<             typename std::decay<Arg>::type >::value || 
-                    std::is_same<unsigned __int64,        typename std::decay<Arg>::type >::value ||
+                    std::is_same<size_t,        typename std::decay<Arg>::type >::value ||
                     std::is_move_constructible< typename std::decay<Arg>::type >::value,
         /* then */  typename std::decay<Arg>::type,
         /* else */  typename std::add_lvalue_reference<Arg>::type

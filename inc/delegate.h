@@ -167,12 +167,6 @@ public:
     {
     }
 
-    template<typename...Ta1>
-    marshal_delegate( TFunction f, const Ta1&...args ) :
-        method( std::forward<TFunction>( f ) ), values( std::forward<TArgs>( args )... )
-    {
-    }
-
     inline TReturn operator()()
     {
         return tuple_call( unpack_t() );
@@ -205,7 +199,7 @@ public:
     }
 
     template<typename...Ta1>
-    marshaled_call( TFunction&& f, Ta1&...args ) :
+    marshaled_call( TFunction&& f,Ta1...args ) :
         call( std::forward<TFunction>( f ), std::forward<Ta1>( args )... )
     {
     }
