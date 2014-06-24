@@ -520,7 +520,7 @@ struct marshal_allocator
             ret = reinterpret_cast<T*>( ( reinterpret_cast<char*>( *data ) + *size - a ) );
 //            *data = ( reinterpret_cast<char*>( *data ) + *size - a );
             *size -= a;
-            
+
         }
 
         return ret;
@@ -574,7 +574,6 @@ RC FunctionTests()
     }
 
     p.Async( [](){ LOG_ALWAYS( "", "" ); } );
-//    return s_ok();
 
     // Scalar Types
     //
@@ -603,7 +602,7 @@ RC FunctionTests()
 
     CRR( p.Async( &target, &ThreadpoolTest::MoveString, std::string( "Ernie" ) ) );
 
-    // 
+    //
     //
     std::list<int> li( { 1, 2, 3, 4, 5, 6 } );
     CRR( p.Async( &target, &ThreadpoolTest::ScalarAndContainer, 1, 1.1, std::move(li) ) );
