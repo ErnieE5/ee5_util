@@ -87,7 +87,6 @@ private:
     size_t              t_count;
 
     std::atomic_size_t  x;
-    std::atomic_size_t  c;
 
     bool lock()
     {
@@ -596,11 +595,10 @@ RC FunctionTests()
     std::string s1( "Foo" );
     std::vector<double> dv( { 10.1, 10.2, 10.3, 10.4, 10.5, 10.6, 10.7, 10.8, 10.9 } );
 
-    CRR( p.AsyncByVal( &target, &ThreadpoolTest::TemplateRef, std::list<double>( { 1.1, 1.2, 1.3, 1.4, 1.5, 1.6 } ) ) );
-    CRR( p.AsyncByVal( &target, &ThreadpoolTest::TemplateRef, std::vector<int>(  { 1, 2, 3, 4, 5 } )                ) );
-    CRR( p.AsyncByVal( &target, &ThreadpoolTest::TemplateRef, dv                                                    ) );
-
-    CRR( p.AsyncByVal( &target, &ThreadpoolTest::CopyString, s1 ) );
+    // CRR( p.AsyncByVal( &target, &ThreadpoolTest::TemplateRef, std::list<double>( { 1.1, 1.2, 1.3, 1.4, 1.5, 1.6 } ) ) );
+    // CRR( p.AsyncByVal( &target, &ThreadpoolTest::TemplateRef, std::vector<int>(  { 1, 2, 3, 4, 5 } )                ) );
+    // CRR( p.AsyncByVal( &target, &ThreadpoolTest::TemplateRef, dv                                                    ) );
+    // CRR( p.AsyncByVal( &target, &ThreadpoolTest::CopyString, s1 ) );
 
 
     CRR( p.Async( &target, &ThreadpoolTest::MoveString, std::string( "Ernie" ) ) );
@@ -777,9 +775,6 @@ void    tp_park( size_t c )
 void tst_threading()
 {
     s_stopwatch_d sw;
-
-    int int_local = 5;
-    double double_local = 5.5;
 
     //     printf("%lu\n",sizeof(ptrdiff_t));
     //     printf("%lu\n",sizeof(long));

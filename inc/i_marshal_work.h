@@ -33,7 +33,6 @@ struct move_value
 {
     using type = typename std::conditional<
         /* if */    std::is_scalar<             typename std::decay<Arg>::type >::value || 
-                    std::is_same<size_t,        typename std::decay<Arg>::type >::value ||
                     std::is_move_constructible< typename std::decay<Arg>::type >::value,
         /* then */  typename std::decay<Arg>::type,
         /* else */  typename std::add_lvalue_reference<Arg>::type
@@ -45,8 +44,8 @@ template<typename Arg>
 struct copy_value
 {
     using type = typename std::conditional<
-        /* if */    std::is_scalar<typename std::decay<Arg>::type >::value,
-        /* then */  typename std::decay<Arg>::type,
+        /* if */    std::is_scalar<Arg>::value,
+        /* then */  Arg,
         /* else */  typename std::add_lvalue_reference<Arg>::type
     >::type;
 };
@@ -69,11 +68,12 @@ private:
     template< typename B, typename M, typename...TArgs >
     RC __enqueue(B&& binder,TArgs&&...args)
     {
-        RC   rc     = e_pool_terminated();
-        M*   call   = nullptr;
+        RC rc = e_pool_terminated();
 
         if( lock() )
         {
+            M* call = nullptr;
+
             rc = get_storage( sizeof( M ), reinterpret_cast<void**>( &call ) );
 
             if( rc == s_ok() )

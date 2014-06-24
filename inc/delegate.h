@@ -225,8 +225,9 @@ class marshaled_call< void(*)(void) > : public i_marshaled_call
 {
 private:
     using void_void = void(*)( );
-    void (*call)(void);
-protected:
+
+    void_void call;
+
 public:
     marshaled_call( const void_void& c ) : call( c )
     {
