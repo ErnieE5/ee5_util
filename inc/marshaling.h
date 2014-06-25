@@ -43,25 +43,25 @@ struct i_marshaled_call
 // be possible to make this a base class and use multiple inheritance, but the clang front end
 // and LLVM back-end do an exceptional job of making most of this disappear.
 //
-template<typename TFunction, typename ...TArgs>
+template<typename TFunc, typename ...TArgs>
 class marshaled_call : public i_marshaled_call
 {
 public:
-    typedef marshal_delegate<TFunction, void, TArgs...> Delegate;
+    typedef marshal_delegate<TFunc, void, TArgs...> Delegate;
 
 private:
     Delegate call;
 
 public:
 
-    marshaled_call( TFunction&& f, TArgs&&...args ) :
-        call( std::forward<TFunction>( f ), std::forward<TArgs>( args )... )
+    marshaled_call( TFunc&& f, TArgs&&...args ) :
+        call( std::forward<TFunc>( f ), std::forward<TArgs>( args )... )
     {
     }
 
     template<typename...Ta1>
-    marshaled_call( TFunction&& f, Ta1...args ) :
-        call( std::forward<TFunction>( f ), std::forward<Ta1>( args )... )
+    marshaled_call( TFunc&& f, Ta1...args ) :
+        call( std::forward<TFunc>( f ), std::forward<Ta1>( args )... )
     {
     }
 
@@ -82,14 +82,15 @@ public:
 // Specialization for the "void f(void)" case of a standard C function
 //
 template<>
-class marshaled_call< void( *)( void ) > : public i_marshaled_call
+class marshaled_call< void(*)( void ) > : public i_marshaled_call
 {
 private:
-    using void_void = void( *)( );
+    using void_void = void(*)( void );
 
     void_void call;
 
 public:
+    marshaled_call() = delete;
     marshaled_call( const void_void& c ) : call( c )
     {
     }
@@ -143,14 +144,14 @@ struct copy_value
 
 // Helper to make the support of lambda expressions a little less hideous (IMO).
 // 
-template<typename TFunction,typename TArg1>
+template<typename TFunc>
 struct m_valid
 {
     using type = typename std::conditional <(
         /* The function value must be a "class" that evaluates to a functor */
-        std::is_class< typename std::remove_pointer<TFunction>::type>::value ||
+        std::is_class< typename std::remove_pointer<TFunc>::type>::value ||
         /* or a function type. */
-        std::is_function< typename std::remove_pointer<TFunction>::type>::value
+        std::is_function< typename std::remove_pointer<TFunc>::type>::value
         ),
         typename std::true_type,
         typename std::false_type >::type;
@@ -204,6 +205,8 @@ private:
 
             if( rc == s_ok() )
             {
+                using namespace std; // To shorten the line a bit
+
                 // Enqueue the work to the underlying implementation. Could be a thread pool or
                 // any other implementation that needs to make work happen asynchronously.
                 //
@@ -212,15 +215,15 @@ private:
                 //                           marshalling routines) 
                 //                           |
                 //                           | 
-                //                           |                   The function/functor that is used 
-                //                           |                   to produce the proper stack frame
-                //                           |                   when the marshalling process is 
-                //                           |                   ready to "run" the function.
-                //                           |                   |
-                rc = enqueue_work( new(call) P( std::forward<F>( f ), std::forward<TArgs>( args )... ) );
-                //                 |                                  |
-                //                 |                                  Arguments marshaled to the
-                //                 |                                  delayed function.
+                //                           |              The function/functor that is used 
+                //                           |              to produce the proper stack frame
+                //                           |              when the marshalling process is 
+                //                           |              ready to "run" the function.
+                //                           |              |
+                rc = enqueue_work( new(call) P( forward<F>( f ), forward<TArgs>( args )... ) );
+                //                 |                             |
+                //                 |                             Arguments marshaled to the
+                //                 |                             delayed function.
                 //                 |
                 //                 placement syntax new is needed to make certain that any v-table
                 //                 or "other magic" is constructed along with the binder object.
@@ -237,8 +240,26 @@ private:
     }
 
 public:
-    // Call a member function of a class in the context of a thread pool thread
-    // with zero or more arguments with rvalue semantics.
+    // Call a member function of a class in the context of an underlying implementation
+    // with zero or more arguments using move semantics. Any STL container or other class that
+    // implements a move constructor passed as an argument will be MOVED from the original 
+    // container into the marshalling data and then moved out after the marshalling has taken
+    // place. 
+    //      
+    //      C c;   // with a method f
+    //
+    //      Async( &C::f, &c, std::vector<int>( { 1, 2, 3, 4, 5 } );
+    //      |
+    //      moved to the underlying operation (thread pool, queue, etc) then moved again
+    //      |
+    //      void C::f(std::vector<int> items)
+    //      {
+    //          // ....
+    //      }
+    //
+    // Note: At the moment VERY LIMITED amounts of data can be marshaled as the underlying 
+    //       routines are NOT COMPLETE yet. The whole POINT of move construction is to avoid having
+    //       to make "deep copies" of data so this isn't a major priority at the moment.
     //
     template<typename O, typename...TArgs>
     RC Async( void ( O::*pM )( typename move_value<TArgs>::type... ), O* pO, TArgs&&...args )
@@ -250,8 +271,14 @@ public:
     }
 
 
+    // WIP
     // 
-    // 
+    //  The move semantics are nice, but I would like to fully support copy semantics as well.
+    //  It gets complex. I looked into using bind, but the sub-allocations that are done
+    //  and the "difficulty" in obtaining the type makes it difficult. i.e. std::bind calls 
+    //  ::new (or supplied allocator ~IF~ implemented!) to create storage. One of the MAJOR design
+    //  elements of this whole exercise is to AVOID any additional heap use and contention on the
+    //  "global" heap in the process.
     //
     template<typename O, typename...TArgs>
     RC AsyncByVal( void ( O::*pM )( typename copy_value<TArgs>::type... ), O* pO, TArgs...args )
@@ -262,7 +289,9 @@ public:
         return __enqueue<binder_t, method_t>( binder_t( pO, pM ), std::forward<TArgs>( args )... );
     }
 
-    // Call any function or lambda that compiles to a void(void) signature.
+    // Call any function or lambda. Interestingly the captures in the list don't "really" impact 
+    // the function ~signature~ and this routine still allocates the memory properly for any 
+    // variables that are included in the capture.
     //
     //  Examples:
     //      struct
@@ -271,39 +300,32 @@ public:
     //      };
     //      void function() { }
     //      auto lambda = []() { };
+    //      auto doit   = [](size_t x) { /*   */ };
     //
-    template<typename TFunction>
-    RC Async( TFunction f )
+    //      Async( x::method   );
+    //      Async( function    );
+    //      Async( lambda      );
+    //      Async( doit, 42ull );
+    //
+    // This version supports any lambda expression or function with arguments.
+    //
+    //  Notes:
+    //      You are likely to encounter challenges if you try and call an operator overload on 
+    //      an object via Async. (It is doable, but the syntax is hairy and it is likely easier
+    //      to create a lambda expression.) While you can use std::function it is redundant 
+    //      and will just add extra overhead with no gain.
+    //
+    // TFunc:   Any expression that evaluates to a function call or lambda expression.
+    // TArgs:   Zero or more arguments
+    //
+    template<typename TFunc,typename...TArgs>
+    typename std::enable_if< m_valid<TFunc>::value, RC>::type
+    /* RC */ Async( TFunc f, TArgs&&...args )
     {
-        using method_t = typename T::template call< TFunction >;
+        using namespace std;
+        using method_t = typename T::template call<TFunc,typename move_value<TArgs>::type...>;
 
-        return __enqueue<TFunction, method_t>( std::forward<TFunction>( f ) );
-    }
-
-
-    // This is a little of a mess. In order to support lambda expressions we need to distinguish 
-    // between the pointer to a member function and the first argument of the lambda.
-    // This has the "messed up" side effect that a lambda expression can not pass a pointer to a
-    // member function as the first argument.  This restriction is because the compiler won't be 
-    // able to disambiguate between this use and the O*->Member(...) usage.
-    //
-    // TFunction:   Any expression that evaluates to a "plain" function call with at
-    //              least a single argument.
-    //
-    // TArg1:       The first argument to allow for disabling selection. If there are no 
-    //              arguments the above will resolve.
-    //
-    // TArgs:       Zero or more additional arguments
-    //
-    //
-    //
-    template<typename TFunction,typename TArg1,typename...TArgs>
-    typename std::enable_if< m_valid<TFunction,TArg1>::value, RC>::type
-    /* RC */ Async( TFunction f, TArg1&& a, TArgs&&...args )
-    {
-        using method_t = typename T::template call<TFunction, typename move_value<TArg1>::type, typename move_value<TArgs>::type...>;
-
-        return __enqueue<TFunction, method_t>( std::forward<TFunction>( f ), std::forward<TArg1>( a ), std::forward<TArgs>( args )... );
+        return __enqueue<TFunc, method_t>( forward<TFunc>( f ), forward<TArgs>( args )... );
     }
 
 };

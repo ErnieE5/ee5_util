@@ -339,8 +339,11 @@ RC FunctionTests()
 
     async( [](){ LOG_ALWAYS( "", "" ); } );
 
+    async( [&]() { LOG_ALWAYS( "Local value (captured) %i %lf", int_local, double_local ); } );
 
-    async([&](void(ThreadpoolTest::* pmf)(int,double,size_t ))
+    // This is "dumb" but it works.
+    //
+    async( [&](void(ThreadpoolTest::* pmf)(int,double,size_t ))
     {
         (target.*pmf)( 5, 5.5, 5555555555ull );
 
