@@ -22,7 +22,6 @@
 #include <tuple>
 #include <functional>
 
-#include <i_marshaled_call.h>
 
 BNS( ee5 )
 
@@ -176,70 +175,5 @@ public:
 
 
 
-//-------------------------------------------------------------------------------------------------
-// This is a slim wrapper around a marshal_delegate that adds the "overhead" of a v-table and
-// the extra indirection required for the abstraction of any call into void(void). It would
-// be possible to make this a base class and use multiple inheritance, but the clang front end
-// and LLVM back-end do an exceptional job of making most of this disappear.
-//
-template<typename TFunction, typename ...TArgs>
-class marshaled_call : public i_marshaled_call
-{
-public:
-    typedef marshal_delegate<TFunction, void, TArgs...> Delegate;
-
-private:
-    Delegate call;
-
-public:
-
-    marshaled_call( TFunction&& f, TArgs&&...args ) :
-        call( std::forward<TFunction>( f ), std::forward<TArgs>( args )... )
-    {
-    }
-
-    template<typename...Ta1>
-    marshaled_call( TFunction&& f,Ta1...args ) :
-        call( std::forward<TFunction>( f ), std::forward<Ta1>( args )... )
-    {
-    }
-
-    ~marshaled_call()
-    {
-    }
-
-    virtual void Execute()
-    {
-        call();
-    }
-};
-
-
-
-
-//-------------------------------------------------------------------------------------------------
-// Specialization for the "void f(void)" case of a standard C function
-//
-template<>
-class marshaled_call< void(*)(void) > : public i_marshaled_call
-{
-private:
-    using void_void = void(*)( );
-
-    void_void call;
-
-public:
-    marshaled_call( const void_void& c ) : call( c )
-    {
-    }
-    ~marshaled_call()
-    {
-    }
-
-    virtual void Execute()
-    {
-        call();
-    }
-};
 
 ENS( ee5 )

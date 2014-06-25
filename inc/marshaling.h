@@ -16,10 +16,93 @@
 #include <ee5>
 
 #include <error.h>
-#include <i_marshaled_call.h>
 #include <delegate.h>
 
 BNS( ee5 )
+
+
+//-------------------------------------------------------------------------------------------------
+// This is an "interface" class. That allows pretty much anything that implements the Execute
+// method be queued and generically executed.  The primary use is by the various instantiations
+// of the marshaled_call template below.
+//
+
+struct i_marshaled_call
+{
+    virtual void Execute() = 0;
+    virtual ~i_marshaled_call()
+    {
+    }
+};
+
+
+
+//-------------------------------------------------------------------------------------------------
+// This is a slim wrapper around a marshal_delegate that adds the "overhead" of a v-table and
+// the extra indirection required for the abstraction of any call into void(void). It would
+// be possible to make this a base class and use multiple inheritance, but the clang front end
+// and LLVM back-end do an exceptional job of making most of this disappear.
+//
+template<typename TFunction, typename ...TArgs>
+class marshaled_call : public i_marshaled_call
+{
+public:
+    typedef marshal_delegate<TFunction, void, TArgs...> Delegate;
+
+private:
+    Delegate call;
+
+public:
+
+    marshaled_call( TFunction&& f, TArgs&&...args ) :
+        call( std::forward<TFunction>( f ), std::forward<TArgs>( args )... )
+    {
+    }
+
+    template<typename...Ta1>
+    marshaled_call( TFunction&& f, Ta1...args ) :
+        call( std::forward<TFunction>( f ), std::forward<Ta1>( args )... )
+    {
+    }
+
+    ~marshaled_call()
+    {
+    }
+
+    virtual void Execute()
+    {
+        call();
+    }
+};
+
+
+
+
+//-------------------------------------------------------------------------------------------------
+// Specialization for the "void f(void)" case of a standard C function
+//
+template<>
+class marshaled_call< void( *)( void ) > : public i_marshaled_call
+{
+private:
+    using void_void = void( *)( );
+
+    void_void call;
+
+public:
+    marshaled_call( const void_void& c ) : call( c )
+    {
+    }
+    ~marshaled_call()
+    {
+    }
+
+    virtual void Execute()
+    {
+        call();
+    }
+};
+
 
 
 // Used to move values that are scalar that have RValue constructors.
