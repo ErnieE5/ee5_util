@@ -12,7 +12,11 @@ The basic idea is an attempt to unify all the "goodness" of the systems I have w
 Environment
 -----------
 
-The code is developed using clang++ under Debian Wheezy running under Parallels and tested on a native server.
+The code is developed using clang++ under Debian Wheezy running under Parallels and tested on a native server. Recently I have also started verifying the builds against the compiler included with Visual Studio 2013. It figures that there are "quirks." Fewer than expected, but still enough to be annoying. Good job MS.
+
+Neither platform is 100% "perfect." There are missing features from the GNU headers in 4.7 (and still in 4.8!). MS doesn't have a clean slate either. cl 17.00.60610.1 and the headers have a few missing features too. Nothing major (Whew!) on either platform YET.
+
+I expect the most issues with the divergence between POSIX and Windows API's for async-io. (Yeah, that is going to be painful.)
 
 
 Info:
@@ -28,3 +32,23 @@ Thread model: posix
 vm /home/erniee/ee5_util -> uname -a
 Linux debian-vm 3.2.0-4-amd64 #1 SMP Debian 3.2.57-3+deb7u2 x86_64 GNU/Linux
 ```
+
+```Textile
+Microsoft (R) C/C++ Optimizing Compiler Version 17.00.60610.1 for x86
+Copyright (C) Microsoft Corporation.  All rights reserved.
+```
+
+```Textile
+Host Name:                 WIN8-VM
+OS Name:                   Microsoft Windows 8.1 Pro
+OS Version:                6.3.9600 N/A Build 9600
+OS Manufacturer:           Microsoft Corporation
+OS Configuration:          Standalone Workstation
+OS Build Type:             Multiprocessor Free
+<snip>
+System Manufacturer:       Parallels Software International Inc.
+System Model:              Parallels Virtual Platform
+System Type:               x64-based PC
+Processor(s):              1 Processor(s) Installed.
+```
+
