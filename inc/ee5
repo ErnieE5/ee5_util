@@ -15,15 +15,24 @@
 #pragma once
 
 
-#define BNS(n) namespace n {
-#define ENS(n) }
-
-
 #ifdef _MSC_VER
 #define ee5_alignas(x) __declspec( align( x ) )
 #else
 #define ee5_alignas(x) alignas(x)
 #endif
 
+//
+// TODO: MSVC respects the thread_local keyword, but doesn't implement it!!!!
+//
+#ifdef _MSC_VER
+#define ee5_thread_local __declspec(thread)
+#else
+#define ee5_thread_local thread_local
+#endif
 
 #define CACHE_ALIGN 64
+
+#define BNS(n) namespace n {
+#define ENS(n) }
+
+

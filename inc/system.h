@@ -17,10 +17,42 @@
 
 #include <error.h>
 #include <cstddef>
+#include <marshaling.h>
 
 BNS( ee5 )
 
 int     Startup(size_t c,const char* s);
 void    Shutdown();
+
+struct async_call
+{
+    static i_marshal_work* tp;
+
+    template<typename F,typename...TArgs>
+    RC operator()( F f, TArgs&&...args )
+    {
+        return tp->Async( std::forward<F>(f),std::forward<TArgs>( args )... );
+    }
+
+    template<typename O, typename...TArgs>
+    RC operator()( void ( O::*pM )( typename move_value<TArgs>::type... ), O* pO, TArgs&&...args )
+    {
+        return tp->Async( pM, pO, std::forward<TArgs>( args )... );
+    }
+
+    operator i_marshal_work*( )
+    {
+        return tp;
+    }
+};
+
+extern async_call async;
+
+void    tp_start( size_t c );
+void    tp_stop();
+size_t  tp_pending();
+size_t  tp_count();
+void    tp_park( size_t c );
+
 
 ENS( ee5 )

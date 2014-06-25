@@ -166,6 +166,12 @@ struct marshaled_as_interface_traits
 };
 
 
+
+//---------------------------------------------------------------------------------------------------------------------
+// marshal_work
+//
+//
+//
 template<typename B, typename T = marshaled_as_interface_traits>
 class marshal_work : public B
 {
@@ -303,12 +309,8 @@ public:
 };
 
 
-
-
-
-
 //---------------------------------------------------------------------------------------------------------------------
-// i_marshal_work
+// marshal_work_abstract
 //
 //
 //

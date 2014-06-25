@@ -13,6 +13,8 @@
 // OTHER DEALINGS IN THE SOFTWARE.
 //
 
+#include <system.h>
+
 #include <cstdio>
 #include <stopwatch.h>
 #include <spin_locking.h>
@@ -28,14 +30,6 @@
 #include <unordered_map>
 
 using namespace ee5;
-
-extern i_marshal_work* pool;
-
-void    tp_start(size_t);
-void    tp_stop();
-size_t  tp_pending();
-size_t  tp_count();
-void    tp_park(size_t);
 
 
 static long double Factorial(size_t n,long double a = 1)
@@ -244,11 +238,11 @@ void tst_spin_locks()
     
     std::array<std::function<stats()>,5> tests;
 
-    tests[0] = std::bind( lock_test<std::mutex>,          pool, iterations, work_loop );
-    tests[1] = std::bind( lock_test<spin_native>,         pool, iterations, work_loop );
-    tests[2] = std::bind( lock_test<spin_mutex>,          pool, iterations, work_loop );
-    tests[3] = std::bind( lock_test<spin_flag>,           pool, iterations, work_loop );
-    tests[4] = std::bind( lock_test<spin_shared_mutex_t>, pool, iterations, work_loop );
+    tests[0] = std::bind( lock_test<std::mutex>,          async, iterations, work_loop );
+    tests[1] = std::bind( lock_test<spin_native>,         async, iterations, work_loop );
+    tests[2] = std::bind( lock_test<spin_mutex>,          async, iterations, work_loop );
+    tests[3] = std::bind( lock_test<spin_flag>,           async, iterations, work_loop );
+    tests[4] = std::bind( lock_test<spin_shared_mutex_t>, async, iterations, work_loop );
 
     std::random_shuffle( tests.begin(), tests.end() );
 

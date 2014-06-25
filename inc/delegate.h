@@ -18,13 +18,10 @@
 #pragma once
 #include <ee5>
 
-#include <cstddef>
 #include <tuple>
-#include <functional>
 
 
 BNS( ee5 )
-
 //-------------------------------------------------------------------------------------------------
 // This template binds a pointer to an object + a pointer to a member function within the
 // object into a single entity that acts like a function call.
@@ -43,6 +40,7 @@ private:
 
 protected:
 public:
+    object_method_delegate() = delete;
     object_method_delegate( TObject* pO, PMethod pM ) :
         object( pO ),
         method( pM )
@@ -162,7 +160,8 @@ private:
 
 public:
     marshal_delegate( TFunction f, TArgs&&...args ) :
-        method( std::forward<TFunction>( f ) ), values( std::forward<TArgs>( args )... )
+        method( std::forward<TFunction>( f ) ), 
+        values( std::forward<TArgs>( args )... )
     {
     }
 
@@ -171,9 +170,6 @@ public:
         return tuple_call( unpack_t() );
     }
 };
-
-
-
-
+  
 
 ENS( ee5 )
