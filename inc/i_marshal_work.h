@@ -155,7 +155,7 @@ public:
     RC Async( void ( O::*pM )( typename move_value<TArgs>::type... ), O* pO, TArgs&&...args )
     {
         using binder_t = object_method_delegate<O, void, typename move_value<TArgs>::type...>;
-        using method_t = T::call<binder_t, typename std::decay<TArgs>::type...>;
+        using method_t = typename T::template call<binder_t, typename std::decay<TArgs>::type...>;
 
         return __enqueue<binder_t, method_t>( binder_t( pO, pM ), std::forward<TArgs>( args )... );
     }
@@ -168,7 +168,7 @@ public:
     RC AsyncByVal( void ( O::*pM )( typename copy_value<TArgs>::type... ), O* pO, TArgs...args )
     {
         using binder_t = object_method_delegate<O, void, typename copy_value<TArgs>::type...>;
-        using method_t = T::call<binder_t, typename std::decay<TArgs>::type...>;
+        using method_t = typename T::template call<binder_t, typename std::decay<TArgs>::type...>;
 
         return __enqueue<binder_t, method_t>( binder_t( pO, pM ), std::forward<TArgs>( args )... );
     }
@@ -186,7 +186,7 @@ public:
     template<typename TFunction>
     RC Async( TFunction f )
     {
-        using method_t = T::call< TFunction >;
+        using method_t = typename T::template call< TFunction >;
 
         return __enqueue<TFunction, method_t>( std::forward<TFunction>( f ) );
     }
@@ -212,7 +212,7 @@ public:
     typename std::enable_if< m_valid<TFunction,TArg1>::value, RC>::type
     /* RC */ Async( TFunction f, TArg1&& a, TArgs&&...args )
     {
-        using method_t = T::call<TFunction, typename move_value<TArg1>::type, typename move_value<TArgs>::type...>;
+        using method_t = typename T::template call<TFunction, typename move_value<TArg1>::type, typename move_value<TArgs>::type...>;
 
         return __enqueue<TFunction, method_t>( std::forward<TFunction>( f ), std::forward<TArg1>( a ), std::forward<TArgs>( args )... );
     }

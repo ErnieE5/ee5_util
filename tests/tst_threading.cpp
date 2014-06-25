@@ -597,7 +597,6 @@ RC FunctionTests()
     //
     CRR( p.Async( &ThreadpoolTest::ScalarTypes, &target, 1, 11.1, size_t( 1000000000000000ull ) ) );
 
-    return s_ok();
 
     // Factorial Work Product
     //
