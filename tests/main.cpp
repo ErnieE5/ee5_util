@@ -25,7 +25,7 @@
 
 using namespace ee5;
 
-#include "i_marshal_work.h"
+#include "marshaling.h"
 
 template <class T, typename H = void>
 struct pool_allocator
