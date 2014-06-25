@@ -26,6 +26,7 @@
 
 #include <algorithm>
 #include <ctime>
+#include <functional>
 #include <list>
 #include <vector>
 #include <string>
@@ -191,7 +192,6 @@ public:
 };
 ENS( ee5 )
 
-#include <functional>
 
 
 TP<i_marshal_work> tp;
@@ -461,89 +461,6 @@ void tst_rvalue_transfers( i_marshal_work* p )
         std::this_thread::yield();
     }
 }
-
-
-template <class T>
-struct marshal_allocator
-{
-    typedef T               value_type;
-    typedef T*              pointer;
-    typedef const T*        const_pointer;
-    typedef T&              reference;
-    typedef const T&        const_reference;
-    typedef std::size_t     size_type;
-    typedef std::ptrdiff_t  difference_type;
-
-    template<typename O> struct rebind
-    {
-        typedef marshal_allocator<O> other;
-    };
-
-    void**  data;
-    size_t* size;
-
-    marshal_allocator()
-    {
-    }
-
-    marshal_allocator(size_t* s,void** d)
-    {
-        size = s;
-        data = d;
-    };
-
-    marshal_allocator(const marshal_allocator& o)
-    {
-        size = o.size;
-        data = o.data;
-    };
-
-    template< class O >
-    marshal_allocator(const marshal_allocator<O>& o)
-    {
-        size = o.size;
-        data = o.data;
-    };
-
-
-    template< class A, class... Args >
-    void construct( A* item, Args&&... args )
-    {
-        ::new( reinterpret_cast<void*>( item ) ) A( std::forward<Args>( args )... );
-    }
-    void destroy( T* item)
-    {
-        if( item )
-        {
-            item->~T();
-        }
-    }
-
-    T* allocate( size_type n, const_pointer hint = 0 )
-    {
-        T* ret = nullptr;
-        size_t a = n * sizeof( T );
-        if( *size > a )
-        {
-            ret = reinterpret_cast<T*>( ( reinterpret_cast<char*>( *data ) + *size - a ) );
-//            *data = ( reinterpret_cast<char*>( *data ) + *size - a );
-            *size -= a;
-
-        }
-
-        return ret;
-    }
-    void deallocate( T* p, size_type n )
-    {
-
-    };
-};
-
-template <class T, class U>
-bool operator==( const marshal_allocator<T>&, const marshal_allocator<U>& );
-template <class T, class U>
-bool operator!=( const marshal_allocator<T>&, const marshal_allocator<U>& );
-
 
 
 
