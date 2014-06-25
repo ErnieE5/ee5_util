@@ -77,35 +77,6 @@ public:
 
 
 
-
-//-------------------------------------------------------------------------------------------------
-// Specialization for the "void f(void)" case of a standard C function
-//
-template<>
-class marshaled_call< void(*)( void ) > : public i_marshaled_call
-{
-private:
-    using void_void = void(*)( void );
-
-    void_void call;
-
-public:
-    marshaled_call() = delete;
-    marshaled_call( const void_void& c ) : call( c )
-    {
-    }
-    ~marshaled_call()
-    {
-    }
-
-    virtual void Execute()
-    {
-        call();
-    }
-};
-
-
-
 // Used to move values that are scalar that have RValue constructors.
 //
 //  This has the effect of ~capturing~ most of the standard containers
@@ -184,8 +155,8 @@ private:
 
     // Get Storage, Construct in place, and queue the result
     //
-    //  F:      Function/Functor type to call with packaged arguments
-    //  P:      aggregate function + packaged arguments container of known size
+    //  F:      Function/Functor/Lambda type to call
+    //  P:      aggregate function + packaged arguments / container of known size
     //  TArgs:  Any additional arguments required to construct the package
     //
     template< typename F, typename P, typename...TArgs >

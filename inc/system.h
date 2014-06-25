@@ -44,6 +44,10 @@ struct async_call
     {
         return tp;
     }
+    i_marshal_work* operator->( )
+    {
+        return tp;
+    }
 };
 
 extern async_call async;

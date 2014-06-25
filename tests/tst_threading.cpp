@@ -370,10 +370,10 @@ RC FunctionTests()
     std::string s1( "Foo" );
     std::vector<double> dv( { 10.1, 10.2, 10.3, 10.4, 10.5, 10.6, 10.7, 10.8, 10.9 } );
 
-    // CRR( asyncByVal( &ThreadpoolTest::TemplateRef,&target,  std::list<double>( { 1.1, 1.2, 1.3, 1.4, 1.5, 1.6 } ) ) );
-    // CRR( asyncByVal( &ThreadpoolTest::TemplateRef,&target,  std::vector<int>(  { 1, 2, 3, 4, 5 } )                ) );
-    // CRR( asyncByVal( &ThreadpoolTest::TemplateRef,&target,  dv                                                    ) );
-    // CRR( asyncByVal( &ThreadpoolTest::CopyString,&target,  s1 ) );
+     CRR( async->AsyncByVal( &ThreadpoolTest::TemplateRef,&target,  std::list<double>( { 1.1, 1.2, 1.3, 1.4, 1.5, 1.6 } ) ) );
+     //CRR( asyncByVal( &ThreadpoolTest::TemplateRef,&target,  std::vector<int>(  { 1, 2, 3, 4, 5 } )                ) );
+     //CRR( asyncByVal( &ThreadpoolTest::TemplateRef,&target,  dv                                                    ) );
+     //CRR( asyncByVal( &ThreadpoolTest::CopyString,&target,  s1 ) );
 
 
     CRR( async( &ThreadpoolTest::MoveString, &target, std::string( "Ernie" ) ) );
