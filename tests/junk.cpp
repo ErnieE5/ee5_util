@@ -47,6 +47,83 @@ using namespace ee5;
 
 
 
+//template<typename T,typename...TArgs>
+//auto has_func_operator(const T& t, TArgs... ) -> decltype( t.foo(), bool )
+//{
+//    return true;
+//}
+//bool has_func_operator( ... )
+//{
+//    return false;
+//}
+//
+//template<typename> struct Void
+//{
+//    typedef void type;
+//};
+//
+//template<typename T, typename Sfinae = void>
+//struct has_foo: std::false_type
+//{
+//};
+//
+//template<typename T>
+//struct has_foo<T, typename Void< decltype( std::declval<T>().foo() )>::type> : std::true_type {};
+
+#if 0
+
+struct check_mf
+{
+    typedef char y[1];
+    typedef char n[2];
+    template <typename _,_> struct tc;
+    template <typename>     static n& chk( ... );
+};
+
+
+template<typename T, typename S,typename...A>
+struct has_foo : check_mf
+{
+    template <typename _> static y& chk(tc<S, &_::foo>*);
+    static bool const value = sizeof(chk<T>(0)) == sizeof(y);
+};
+
+struct fun
+{
+    void foo()
+    {
+    }
+    void foo( int )
+    {
+    }
+    void operator()( float )
+    {
+        printf( "Glarf\n" );
+    }
+    void operator()( int )
+    {
+        printf( "Slarf\n" );
+    }
+};
+
+fun f1;
+
+void( fun::*g )( float ) = &fun::operator();
+
+//    std::declval<void( fun::* )( int ) )>::type f;
+
+//        = &fun::operator();
+
+
+( f1.*g )( 1 );
+
+printf( "fun: %i\n", has_foo<fun, void ( fun::* )( )>::value,
+        std::is_convertible< fun, void()>::value,
+        std::is_function<fun>::value );
+
+return 0;
+#endif
+
 
 
 

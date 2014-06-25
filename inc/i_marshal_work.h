@@ -22,11 +22,13 @@
 BNS( ee5 )
 
 
-
-// This turns non-scaler types into references in the function signature. Copy semantics
-// can be extraordinarily expensive and while we need to make a copy of the values during the
-// marshaling of the data, it would be "criminal" to make yet ANOTHER copy of the data that
-// is sitting in the tuple that acts as storage.
+// Used to move values that are scalar that have RValue constructors.
+//
+//  This has the effect of ~capturing~ most of the standard containers
+//  and moving the values instead of copying. As the containers aren't 
+//  thread safe (by default) this avoids extra copies. If you 
+//  ~don't~ want this default behavior, you will need to use the ByVal
+//  methods.
 //
 template<typename Arg>
 struct move_value
@@ -40,6 +42,11 @@ struct move_value
 };
 
 
+// This turns non-scaler types into references in the function signature. Copy semantics
+// can be extraordinarily expensive and while we need to make a copy of the values during the
+// marshaling of the data, it would be "criminal" to make yet ANOTHER copy of the data that
+// is sitting in the tuple that acts as storage.
+//
 template<typename Arg>
 struct copy_value
 {
@@ -51,34 +58,87 @@ struct copy_value
 };
 
 
+// Helper to make the support of lambda expressions a little less hideous (IMO).
+// 
+template<typename TFunction,typename TArg1>
+struct m_valid
+{
+    using type = typename std::conditional <(
+        /* The function value must be a "class" that evaluates to a functor */
+        std::is_class< typename std::remove_pointer<TFunction>::type>::value ||
+        /* or a function type. */
+        std::is_function< typename std::remove_pointer<TFunction>::type>::value
+        ),
+        typename std::true_type,
+        typename std::false_type >::type;
 
-//---------------------------------------------------------------------------------------------------------------------
-// i_marshal_work
-//
-//
-//
-class i_marshal_work
+    static const typename type::value_type value = type::value;
+};
+
+
+struct marshaled_as_interface_traits
+{
+    template<typename F,typename...TArgs>
+    using call = marshaled_call < F, TArgs... > ;
+};
+
+
+template<typename B, typename T = marshaled_as_interface_traits>
+class marshal_work : public B
 {
 private:
-    virtual bool    lock()                                  = 0;
-    virtual void    unlock()                                = 0;
-    virtual RC      get_storage(size_t size,void** data)    = 0;
-    virtual RC      enqueue_work(i_marshaled_call *)        = 0;
+    using B::lock;
+    using B::unlock;
+    using B::get_storage;
+    using B::enqueue_work;
 
-    template< typename B, typename M, typename...TArgs >
-    RC __enqueue(B&& binder,TArgs&&...args)
+    // Get Storage, Construct in place, and queue the result
+    //
+    //  F:      Function/Functor type to call with packaged arguments
+    //  P:      aggregate function + packaged arguments container of known size
+    //  TArgs:  Any additional arguments required to construct the package
+    //
+    template< typename F, typename P, typename...TArgs >
+    RC __enqueue( F&& f, TArgs&&...args )
     {
         RC rc = e_pool_terminated();
 
+        // Assure that the underlying object is "running." 
+        //
         if( lock() )
         {
-            M* call = nullptr;
-
-            rc = get_storage( sizeof( M ), reinterpret_cast<void**>( &call ) );
+            P* call = nullptr;
+        
+            // Acquire the memory to construct the arguments to be marshaled
+            //
+            rc = get_storage( sizeof( P ), reinterpret_cast<void**>( &call ) );
 
             if( rc == s_ok() )
             {
-                rc = enqueue_work( new(call) M( std::forward<B>(binder), std::forward<TArgs>(args)... ) );
+                // Enqueue the work to the underlying implementation. Could be a thread pool or
+                // any other implementation that needs to make work happen asynchronously.
+                //
+                //                           The package that holds all required data placed in
+                //                           a single location (no use of ::new by any of the
+                //                           marshalling routines) 
+                //                           |
+                //                           | 
+                //                           |                   The function/functor that is used 
+                //                           |                   to produce the proper stack frame
+                //                           |                   when the marshalling process is 
+                //                           |                   ready to "run" the function.
+                //                           |                   |
+                rc = enqueue_work( new(call) P( std::forward<F>( f ), std::forward<TArgs>( args )... ) );
+                //                 |                                  |
+                //                 |                                  Arguments marshaled to the
+                //                 |                                  delayed function.
+                //                 |
+                //                 placement syntax new is needed to make certain that any v-table
+                //                 or "other magic" is constructed along with the binder object.
+                //                 placement new can not fail, however the objects that are under
+                //                 construction CAN throw. The construction has to be done here
+                //                 because of the requirement that an interface style object 
+                //                 implement the storage.
             }
 
             unlock();
@@ -92,35 +152,43 @@ public:
     // with zero or more arguments with rvalue semantics.
     //
     template<typename O, typename...TArgs>
-    RC Async( O* pO, void ( O::*pM )( typename move_value<TArgs>::type... ), TArgs&&...args )
+    RC Async( void ( O::*pM )( typename move_value<TArgs>::type... ), O* pO, TArgs&&...args )
     {
         using binder_t = object_method_delegate<O, void, typename move_value<TArgs>::type...>;
-        using method_t = marshaled_call<binder_t,typename std::decay<TArgs>::type...>;
+        using method_t = T::call<binder_t, typename std::decay<TArgs>::type...>;
 
-        return __enqueue<binder_t,method_t>( binder_t(pO,pM), std::forward<TArgs>(args)... );
+        return __enqueue<binder_t, method_t>( binder_t( pO, pM ), std::forward<TArgs>( args )... );
     }
-    
-    
+
+
     // 
     // 
     //
     template<typename O, typename...TArgs>
-    RC AsyncByVal( O* pO, void ( O::*pM )( typename copy_value<TArgs>::type... ), TArgs...args )
+    RC AsyncByVal( void ( O::*pM )( typename copy_value<TArgs>::type... ), O* pO, TArgs...args )
     {
         using binder_t = object_method_delegate<O, void, typename copy_value<TArgs>::type...>;
-        using method_t = marshaled_call<binder_t,typename std::decay<TArgs>::type...>;
+        using method_t = T::call<binder_t, typename std::decay<TArgs>::type...>;
 
-        return __enqueue<binder_t,method_t>( binder_t(pO,pM), std::forward<TArgs>(args)... );
+        return __enqueue<binder_t, method_t>( binder_t( pO, pM ), std::forward<TArgs>( args )... );
     }
 
-    // Call any function or functor that compiles to a void(void) signature
+    // Call any function or lambda that compiles to a void(void) signature.
+    //
+    //  Examples:
+    //      struct
+    //      {
+    //          static void method() { };
+    //      };
+    //      void function() { }
+    //      auto lambda = []() { };
     //
     template<typename TFunction>
     RC Async( TFunction f )
     {
-        using method_t = marshaled_call < TFunction > ;
+        using method_t = T::call< TFunction >;
 
-        return __enqueue<TFunction, method_t>( std::forward<TFunction>(f) );
+        return __enqueue<TFunction, method_t>( std::forward<TFunction>( f ) );
     }
 
 
@@ -130,35 +198,48 @@ public:
     // member function as the first argument.  This restriction is because the compiler won't be 
     // able to disambiguate between this use and the O*->Member(...) usage.
     //
-    template<
-        typename    TFunction,  // Any expression that evaluates to a "plain" function call with at
-                                // least a single argument.
-        typename    TArg1,      // The first argument to allow for disabling selection
-        typename... TArgs,      // Zero or more additional arguments
-        typename =  typename    // This syntax sucks. "Attribute mark-up" ~could~ be better.
-        std::enable_if
-        <
-            (
-                /* The function value must be a "class" that evaluates to a functor */
-                std::is_class< typename std::remove_pointer<TFunction>::type>::value    ||
-                /* or a function type. */
-                std::is_function< typename std::remove_pointer<TFunction>::type>::value
-            )
-            && /* The first marshaled argument can not be a pointer to a member function of a class. */
-            (
-                ! std::is_member_function_pointer<TArg1>::value
-            ),
-            TFunction
-        >::type
-    >
-    RC Async(TFunction f,TArg1&& a,TArgs&&...args)
+    // TFunction:   Any expression that evaluates to a "plain" function call with at
+    //              least a single argument.
+    //
+    // TArg1:       The first argument to allow for disabling selection. If there are no 
+    //              arguments the above will resolve.
+    //
+    // TArgs:       Zero or more additional arguments
+    //
+    //
+    //
+    template<typename TFunction,typename TArg1,typename...TArgs>
+    typename std::enable_if< m_valid<TFunction,TArg1>::value, RC>::type
+    /* RC */ Async( TFunction f, TArg1&& a, TArgs&&...args )
     {
-        using method_t = marshaled_call<TFunction, typename move_value<TArg1>::type, typename move_value<TArgs>::type...>;
+        using method_t = T::call<TFunction, typename move_value<TArg1>::type, typename move_value<TArgs>::type...>;
 
         return __enqueue<TFunction, method_t>( std::forward<TFunction>( f ), std::forward<TArg1>( a ), std::forward<TArgs>( args )... );
     }
 
 };
+
+
+
+
+
+
+//---------------------------------------------------------------------------------------------------------------------
+// i_marshal_work
+//
+//
+//
+class marshal_work_abstract
+{
+protected:
+    virtual bool    lock()                                  = 0;
+    virtual void    unlock()                                = 0;
+    virtual RC      get_storage(size_t size,void** data)    = 0;
+    virtual RC      enqueue_work(i_marshaled_call *)        = 0;
+};
+
+using i_marshal_work = marshal_work < marshal_work_abstract > ;
+
 
 
 ENS( ee5 )

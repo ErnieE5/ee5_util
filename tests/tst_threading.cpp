@@ -40,7 +40,9 @@ using namespace ee5;
 //
 //
 //
-class TP : public i_marshal_work
+BNS( ee5 )
+template<typename B>
+class TP : public B
 {
 private:
     //    cv_event chill;
@@ -88,6 +90,7 @@ private:
 
     std::atomic_size_t  x;
 
+protected:
     bool lock()
     {
         return active.try_lock_shared();
@@ -128,7 +131,7 @@ private:
 public:
     TP()
     {
-        printf( "wt=%lu\n", sizeof( work_thread_t ) );
+        printf( "wt=%llu\n", sizeof( work_thread_t ) );
 
         active.lock();
     }
@@ -186,14 +189,19 @@ public:
         //        chill.wait();
     }
 };
-
+ENS( ee5 )
 
 #include <functional>
 
 
-TP tp;
+TP<i_marshal_work> tp;
 
+struct e
+{
+};
 
+using TP2 = marshal_work < TP<e> > ;
+TP2 tp2;
 
 
 //-------------------------------------------------------------------------------------------------
@@ -227,18 +235,18 @@ struct ThreadpoolTest
 
     void ScalarTypes( int a, double b, size_t c )
     {
-        LOG_ALWAYS( "a: %i b:%g c:%lu", a, b, c );
+        LOG_ALWAYS( "a: %i b:%lf c:%llu", a, b, c );
     }
 
     template<typename C>
     void TemplateRef( C& items )
     {
-        LOG_ALWAYS( "(%lu)--", items.size() );
+        LOG_ALWAYS( "(%llu)--", items.size() );
     }
 
     void ScalarAndContainer( int a, double b, std::list<int> l )
     {
-        LOG_ALWAYS( "(%lu) a:%i b:%g --", l.size(), a, b );
+        LOG_ALWAYS( "(%llu) a:%i b:%g --", l.size(), a, b );
     }
 
     void CopyString( std::string& s )
@@ -284,7 +292,7 @@ struct ThreadpoolTest
 //
 void c_function( size_t y )
 {
-    LOG_ALWAYS( "y:%lu", y );
+    LOG_ALWAYS( "y:%llu", y );
 }
 
 
@@ -337,7 +345,7 @@ struct rvalue_test
         std::generate( v1.begin() + 1, v1.end(), []()->size_t{ return std::rand(); } );
         LOG_UNAME( "jtst", "0x%.16lx Items %11lu  Time: %12.0f us inner", v1.data(), v1.size(), t.delta() );
 
-        p->Async( this, &rvalue_test::join, std::move( v1 ) );
+        p->Async( &rvalue_test::join, this, std::move( v1 ) );
     }
 
     void outer( size_t num )
@@ -352,7 +360,7 @@ struct rvalue_test
 
         size_t* addr = v.data();
 
-        p->Async( this, &rvalue_test::inner, std::move( v ) );
+        p->Async( &rvalue_test::inner, this, std::move( v ) );
 
         LOG_UNAME( "jtst", "0x%.16lx Items %11lu  Time: %12.0f us outer", addr, p10[num], t.delta() );
     };
@@ -368,7 +376,7 @@ struct rvalue_test
         //
         for(size_t size = 0; size < p10.size(); ++size)
         {
-            p->Async( this, &rvalue_test::outer, size );
+            p->Async( &rvalue_test::outer, this, size );
             ++pending;
         }
 
@@ -555,74 +563,86 @@ RC FunctionTests()
     int             int_local = 55555;
     double          double_local = 55.555;
 
-    TP& p = tp;
+    //TP<i_marshal_work>& p = tp;
 
-    us_stopwatch_s tpmf;
-    rvalue_test x( &tp );
-    size_t pmftime = tpmf.delta();
+    TP2& p = tp2;
 
-    us_stopwatch_s tlambda;
-    tst_rvalue_transfers( &tp );
-    size_t lambdas = tlambda.delta();
+    //us_stopwatch_s tpmf;
+    //rvalue_test x( &tp );
+    //size_t pmftime = tpmf.delta();
 
-    LOG_UNAME( "jtst", "Labmda's   :%lu us", lambdas );
-    LOG_UNAME( "jtst", "PMF's      :%lu us", pmftime );
+    //us_stopwatch_s tlambda;
+    //tst_rvalue_transfers( &tp );
+    //size_t lambdas = tlambda.delta();
 
-    while( tp.Pending() )
-    {
-        std::this_thread::yield();
-    }
+    //LOG_UNAME( "jtst", "Labmda's   :%llu us", lambdas );
+    //LOG_UNAME( "jtst", "PMF's      :%llu us", pmftime );
+
+    //while( tp.Pending() )
+    //{
+    //    std::this_thread::yield();
+    //}
 
     p.Async( [](){ LOG_ALWAYS( "", "" ); } );
 
+
+    p.Async([&](void(ThreadpoolTest::* pmf)(int,double,size_t ))
+    {
+        (target.*pmf)( 5, 5.5, 5555555555ull );
+
+    }, &ThreadpoolTest::ScalarTypes );
+
+
     // Scalar Types
     //
-    CRR( p.Async( &target, &ThreadpoolTest::ScalarTypes, 1, 11.1, size_t(1000000000000000ull) ) );
+    CRR( p.Async( &ThreadpoolTest::ScalarTypes, &target, 1, 11.1, size_t( 1000000000000000ull ) ) );
+
+    return s_ok();
 
     // Factorial Work Product
     //
     for(size_t n=1;n<26;++n)
     {
-        CRR( p.Async( &target, &ThreadpoolTest::CalcFactorial, n ) );
+        CRR( p.Async( &ThreadpoolTest::CalcFactorial, &target, n ) );
     }
 
     // 9 Argument Support
     //
-    CRR( p.Async( &target, &ThreadpoolTest::NineArgs, 1, 2, 3, 4, 5, 6, 7, 8, 9 ) );
+    CRR( p.Async( &ThreadpoolTest::NineArgs, &target, 1, 2, 3, 4, 5, 6, 7, 8, 9 ) );
 
 
     std::string s1( "Foo" );
     std::vector<double> dv( { 10.1, 10.2, 10.3, 10.4, 10.5, 10.6, 10.7, 10.8, 10.9 } );
 
-    // CRR( p.AsyncByVal( &target, &ThreadpoolTest::TemplateRef, std::list<double>( { 1.1, 1.2, 1.3, 1.4, 1.5, 1.6 } ) ) );
-    // CRR( p.AsyncByVal( &target, &ThreadpoolTest::TemplateRef, std::vector<int>(  { 1, 2, 3, 4, 5 } )                ) );
-    // CRR( p.AsyncByVal( &target, &ThreadpoolTest::TemplateRef, dv                                                    ) );
-    // CRR( p.AsyncByVal( &target, &ThreadpoolTest::CopyString, s1 ) );
+    // CRR( p.AsyncByVal( &ThreadpoolTest::TemplateRef,&target,  std::list<double>( { 1.1, 1.2, 1.3, 1.4, 1.5, 1.6 } ) ) );
+    // CRR( p.AsyncByVal( &ThreadpoolTest::TemplateRef,&target,  std::vector<int>(  { 1, 2, 3, 4, 5 } )                ) );
+    // CRR( p.AsyncByVal( &ThreadpoolTest::TemplateRef,&target,  dv                                                    ) );
+    // CRR( p.AsyncByVal( &ThreadpoolTest::CopyString,&target,  s1 ) );
 
 
-    CRR( p.Async( &target, &ThreadpoolTest::MoveString, std::string( "Ernie" ) ) );
+    CRR( p.Async( &ThreadpoolTest::MoveString, &target, std::string( "Ernie" ) ) );
 
     //
     //
     std::list<int> li( { 1, 2, 3, 4, 5, 6 } );
-    CRR( p.Async( &target, &ThreadpoolTest::ScalarAndContainer, 1, 1.1, std::move(li) ) );
+    CRR( p.Async( &ThreadpoolTest::ScalarAndContainer, &target, 1, 1.1, std::move( li ) ) );
 
 
     // Template Member Calls
     //
-    CRR( p.Async( &target, &ThreadpoolTest::Template, std::string("Ewert")       ) );
-    CRR( p.Async( &target, &ThreadpoolTest::Template, 5.5                        ) );
-    CRR( p.Async( &target, &ThreadpoolTest::Template, 0x1000200030004000ll       ) );
-    CRR( p.Async( &target, &ThreadpoolTest::Template, 0xF000E000D000C000         ) );
-    CRR( p.Async( &target, &ThreadpoolTest::Template, static_cast<char>(0x45)    ) );
-    CRR( p.Async( &target, &ThreadpoolTest::Template, &double_local              ) );
+    CRR( p.Async( &ThreadpoolTest::Template, &target, std::string( "Ewert" ) ) );
+    CRR( p.Async( &ThreadpoolTest::Template, &target, 5.5 ) );
+    CRR( p.Async( &ThreadpoolTest::Template, &target, 0x1000200030004000ll ) );
+    CRR( p.Async( &ThreadpoolTest::Template, &target, 0xF000E000D000C000 ) );
+    CRR( p.Async( &ThreadpoolTest::Template, &target, static_cast<char>( 0x45 ) ) );
+    CRR( p.Async( &ThreadpoolTest::Template, &target, &double_local ) );
 
     // Scaler Types as references
     //
-    CRR( p.Async( &target, &ThreadpoolTest::ScalarTypes, int_local ,double_local, sizeof(unsigned)           ) );
-    CRR( p.Async( &target, &ThreadpoolTest::ScalarTypes, int_local ,double_local, sizeof(size_t)             ) );
-    CRR( p.Async( &target, &ThreadpoolTest::ScalarTypes, int_local ,double_local, sizeof(unsigned long)      ) );
-    CRR( p.Async( &target, &ThreadpoolTest::ScalarTypes, int_local ,double_local, sizeof(unsigned long long) ) );
+    CRR( p.Async( &ThreadpoolTest::ScalarTypes, &target, int_local, double_local, sizeof( unsigned ) ) );
+    CRR( p.Async( &ThreadpoolTest::ScalarTypes, &target, int_local, double_local, sizeof( size_t ) ) );
+    CRR( p.Async( &ThreadpoolTest::ScalarTypes, &target, int_local, double_local, sizeof( unsigned long ) ) );
+    CRR( p.Async( &ThreadpoolTest::ScalarTypes, &target, int_local, double_local, sizeof( unsigned long long ) ) );
 
 
     int h = 0;  // This value is just used for lambda capture testing in the following
@@ -736,7 +756,7 @@ RC FunctionTests()
 
     //     assert( cc == 7777777 );
     //
-    //     LOG_ALWAYS("cc == %lu", cc.load() );
+    //     LOG_ALWAYS("cc == %llu", cc.load() );
 
     LOG_ALWAYS( "Asta........", "" );
 
@@ -798,11 +818,11 @@ void tst_threading()
     //
     //     return;
 
-    tp.Start();
+    tp2.Start();
 
     FunctionTests();
 
-    tp.Shutdown();
+    tp2.Shutdown();
 
     // LOG_ALWAYS("%s","互いに同胞の精神をもって行動しなければならない。");
     // LOG_ALWAYS("%s","请以手足关系的精神相对待");
