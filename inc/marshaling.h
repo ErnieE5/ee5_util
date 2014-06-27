@@ -26,7 +26,6 @@ BNS( ee5 )
 // method be queued and generically executed.  The primary use is by the various instantiations
 // of the marshaled_call template below.
 //
-
 struct i_marshaled_call
 {
     virtual void Execute() = 0;
@@ -77,42 +76,190 @@ public:
 
 
 
-// Used to move values that are scalar that have RValue constructors.
+//-------------------------------------------------------------------------------------------------
+// marshal_work / i_marshal_work implementation
 //
-//  This has the effect of ~capturing~ most of the standard containers
-//  and moving the values instead of copying. As the containers aren't 
-//  thread safe (by default) this avoids extra copies. If you 
-//  ~don't~ want this default behavior, you will need to use the ByVal
-//  methods.
+// The following "mess" is all linked together to make it "simpler" to assure the intent of the 
+// programmer is followed but also to maintain efficiency. 
+// 
+// is_byval is a "typical" way to determine if a method exists in a template expansion. The "extra"
+// weirdness is the detection of the "inner" type that is wrapped. Because of the way templates
+// are expanded, all branches are evaluated. The empty struct gives a void type that is never
+// used except by the initial expansions.  (Thanks internet for the basic idea!)
+//
+// The verbosity of template meta-programming is a bit much. I love that it enables this type of
+// adaptation to the language because this code allows for "modern styles" of programming within 
+// the framework of an EXTRA efficient implementation. The brevity of symbols in this routine
+// is NOT intended as obfuscation. 
+// 
+template<typename T>
+class is_byval
+{
+private: 
+    // No real need to give analyzers any more symbols to present.
+    //
+    struct empty { using type = void; };
+    //
+    typedef char y[1]; // type with size of 1 means that the method was present
+    typedef char n[2]; // 2 means that the SFINAE (Substitution Failure Is Not An Error) didn't 
+    //                 // find the method via the structure tc (type check)
+    //
+    template <typename _, _> struct tc; // Check to see if the pmf is valid
+    //                 |  |
+    //                 This is such a cool way to verify that one thing is like the other.
+    //
+    // The following expression (bc) is used twice and might make it easier to read. (Ha!)
+    //
+    //  Basically: 
+    //      This defines a type that is a template implementation that defines a type that 
+    //      is a pointer to a member function that is void(void) 
+    //
+    //              void( _::* )( )
+    //
+    //      Then the type is used as an argument that MUST be a static type during compilation.
+    //      If the second expression fails to match the signature, then SFINAE chooses the ( ... )
+    //      methods. It is my hope that this name mangling is good enough!
+    //
+    template <typename _>
+    using bc = tc < void( _::* )( ), &_::__CoPieD_ByVaL__ >; 
+
+    template <typename _> static n&    chk( ... );     // Nope, not a byval wrapped class
+    template <typename _> static empty typ( ... );     // empty type for me
+
+    template <typename _> static y&    chk( bc<_>* );  // Yup, byval wrapped it
+    template <typename _> static T     typ( bc<_>* );  // Use the type in the wrapper.
+
+    using decayed_type = typename std::decay<T>::type;          // The type sans any &&,&,*,const 
+                                                                // modifiers
+
+    using wrapped_type = decltype( typ<decayed_type>( 0 ) );    // This is the wrapped type which
+                                                                // very well may be wrapping
+                                                                // itself!
+
+    static bool const signature_exists = sizeof( chk<decayed_type>( 0 ) ) == sizeof( y );
+
+public:
+    // value is true if the tested value contains the signature false otherwise
+    //
+    static bool const   value   = signature_exists;
+
+    // type is the object that is wrapped or void if testing an object that wasn't wrapped
+    //
+    using               type    = typename wrapped_type::type;
+};
+//
+// The template expansion routines end up always expanding the arguments even if the 
+// evaluation path is short circuited in the conditional. (This doesn't match the semantics
+// you might expect of a typical if routine. (i.e. stop evaluation if the first argument tells
+// you that no more work is required.) Also, because of the recursive nature of expansion, the 
+// routine would end up getting wrapped in itself and we can stop that too.
+//
+// This allows the parser to create an acceptable base class that is never used.
+//
+struct copy_nothing
+{
+};
+//
+// Selector to choose the base implementation for the copy_movable adaptor
+//
+template<typename T>
+using select_base = typename 
+        std::conditional< 
+            is_byval<T>::value || !std::is_class<T>::value, 
+            copy_nothing, 
+            T
+        >::type;
+//
+// copy_movable is used to adapt a normally movable/moved object when you REALLY want to
+// make a copy and not give up the resources.
+// 
+template<typename T, typename B = select_base<T> >
+struct copy_movable : B
+{
+    // This is a "magic" signature to allow for testing if an object ~is~ an implementation 
+    // of copy_movable for argument conversion. It is never called, just declared.
+    //
+    void __CoPieD_ByVaL__();
+
+    // This type is the type that the signature of the TARGET call should have. The reason 
+    // for this is to avoid extra copies. The copied value ~stays~ in the std::tuple used to 
+    // marshal the data across what ever boundary (thread/queue, etc.). 
+    //
+    using type = typename std::add_lvalue_reference<T>::type;
+
+    copy_movable( copy_movable&& o ) : B( std::move( static_cast<B&&>(o) ) )
+    {
+    }
+
+    copy_movable( T&& t ) : B( std::forward<T>(t) )
+    {
+    }
+};
+//
+// This function allows a user of the async marshaling to make a normally movable class object 
+// into a copied object.  The class is used as the base of a carrier that allows the a_sig
+// routines to override the default behavior of moving an object. This is useful if the INTENT
+// of the async call is to use a COPY of an otherwise moveable object. 
+//
+// Given a std::string that is a member you might not want to move it around. (I really wouldn't
+// want to copy it in most cases either, but hey sometimes you have to!) So you can:
+//
+//      (1) Create a copy and have that copy moved to the called target.
+//      (2) Or force the marshalling routines to use copy semantics.
+//
+//      std::string = "Hi ya!";
+//
+//      Async( [](std::string s)  { /*...*/ }, std::string( value ) );  // (1)
+//      Async( [](std::string& s) { /*...*/ }, byval( value ) );        // (2)
+//
+//  More or less the above examples are identical in effect. What you choose to do should be 
+//  dependant on the requirements at hand. (i.e. The method is sometimes called async, but 
+//  most of the time it is used "inline" and a reference signature is more appropriate for the
+//  nominal case.
+//
+template<typename T, typename std::enable_if< std::is_class<T>::value, T>::type* = nullptr >
+auto byval( T i )->copy_movable<typename std::decay<T>::type>
+{
+    return copy_movable<typename std::decay<T>::type>( std::forward<T>(i) );
+}
+//
+// a_sig is used to choose (adapt) the signature of the TARGET method to the appropriate type.
+//
+//  This has the effect of ~capturing~ most of the standard containers and moving the values 
+//  instead of copying. As the containers aren't thread safe (by default) this avoids extra 
+//  copies. If you ~don't~ want this default behavior, use the byval function to explicitly 
+//  declare you really WANT to make a deep copy of the object.
 //
 template<typename Arg>
-struct move_value
+struct a_sig
 {
-    using type = typename std::conditional<
-        /* if */    std::is_scalar<             typename std::decay<Arg>::type >::value || 
-                    std::is_move_constructible< typename std::decay<Arg>::type >::value,
-        /* then */  typename std::decay<Arg>::type,
-        /* else */  typename std::add_lvalue_reference<Arg>::type
-    >::type;
+    // Helpers to make this slightly less verbose
+    //
+    using decay = typename std::decay<Arg>::type;
+    using lvalr = typename std::add_lvalue_reference<Arg>::type;
+
+    //  If the Arg is a byval wrapper: Expand, then use the type 
+    //  of the wrapped item (a reference to the object in the called target).
+    //
+    //      It the object is movable or a scalar value, the signature is expected
+    //      to match the "base" object.
+    //
+    //      Otherwise, if we can not move it then a copy will be made and the
+    //      behavior is to require a reference value in the target to avoid an additional 
+    //      copy during invocation.
+    //
+    using type  = typename std::conditional< 
+            /* if   */  is_byval<Arg>::value,
+            /* then */  typename is_byval<Arg>::type,
+            /* else */  typename std::conditional<
+                /* if   */  std::is_scalar<decay>::value || 
+                            std::is_move_constructible<decay>::value,
+                /* then */  decay,
+                /* else */  lvalr
+                        >::type
+                  >::type;
 };
-
-
-// This turns non-scaler types into references in the function signature. Copy semantics
-// can be extraordinarily expensive and while we need to make a copy of the values during the
-// marshaling of the data, it would be "criminal" to make yet ANOTHER copy of the data that
-// is sitting in the tuple that acts as storage.
 //
-template<typename Arg>
-struct copy_value
-{
-    using type = typename std::conditional<
-        /* if */    std::is_scalar<Arg>::value,
-        /* then */  Arg,
-        /* else */  typename std::add_lvalue_reference<Arg>::type
-    >::type;
-};
-
-
 // Helper to make the support of lambda expressions a little less hideous (IMO).
 // 
 template<typename TFunc>
@@ -129,20 +276,21 @@ struct m_valid
 
     static const typename type::value_type value = type::value;
 };
-
-
-struct marshaled_as_interface_traits
+//
+// Default traits for work marshaling
+//
+ struct marshaled_as_interface_traits
 {
     template<typename F,typename...TArgs>
     using call = marshaled_call < F, TArgs... > ;
 };
-
-
-
-//---------------------------------------------------------------------------------------------------------------------
-// marshal_work
 //
-//
+// marshal_work is a container for the adaptors that make it much simpler to capture 
+// the information needed to marshal data between threads without ~having~ to create 
+// objects to move simple parameters. This implementation is based on many C++11 constructs
+// but doesn't use a few of the "obvious" ones. std::bind, std::function are both avoided 
+// because of the sub allocations required. While they ~might~ have a user provided allocator
+// base, it is considerably better to avoid all of that to get stuff closer in memory.
 //
 template<typename B, typename T = marshaled_as_interface_traits>
 class marshal_work : public B
@@ -157,7 +305,7 @@ private:
     //
     //  F:      Function/Functor/Lambda type to call
     //  P:      aggregate function + packaged arguments / container of known size
-    //  TArgs:  Any additional arguments required to construct the package
+    //  TArgs:  Any additional arguments required to construct the package being marshaled
     //
     template< typename F, typename P, typename...TArgs >
     RC __enqueue( F&& f, TArgs&&...args )
@@ -176,7 +324,7 @@ private:
 
             if( rc == s_ok() )
             {
-                using namespace std; // To shorten the line a bit
+                using namespace std; // To shorten the line horizontally a bit. :-O
 
                 // Enqueue the work to the underlying implementation. Could be a thread pool or
                 // any other implementation that needs to make work happen asynchronously.
@@ -211,13 +359,16 @@ private:
     }
 
 public:
-    // Call a member function of a class in the context of an underlying implementation
-    // with zero or more arguments using move semantics. Any STL container or other class that
-    // implements a move constructor passed as an argument will be MOVED from the original 
-    // container into the marshalling data and then moved out after the marshalling has taken
-    // place. 
+    //  Call a member function of a class in the context of an underlying implementation
+    //  with zero or more arguments using move semantics. Any STL container or other class that
+    //  implements a move constructor passed as an argument will be MOVED from the original 
+    //  container into the marshalling data and then moved out after the marshalling has taken
+    //  place. 
     //      
-    //      C c;   // with a method f
+    //      struct C 
+    //      { 
+    //          void f( std::vector<int> items ) { } 
+    //      } c;
     //
     //      Async( &C::f, &c, std::vector<int>( { 1, 2, 3, 4, 5 } );
     //      |
@@ -228,38 +379,25 @@ public:
     //          // ....
     //      }
     //
-    // Note: At the moment VERY LIMITED amounts of data can be marshaled as the underlying 
-    //       routines are NOT COMPLETE yet. The whole POINT of move construction is to avoid having
-    //       to make "deep copies" of data so this isn't a major priority at the moment.
+    //  If you DON'T want to give up the container use the byval modifier function.
+    //
+    //      std::vector<int> container( { 1, 2, 3, 4, 5 } );
+    //
+    //      Async( &C::f, &c, byval(container) );
+    //
+    // Note: At the ~moment~ VERY LIMITED amounts of data can be marshaled as the underlying 
+    //       routines are **NOT COMPLETE** ~yet~. The whole POINT of move construction is to avoid 
+    //       having to make "deep copies" of data so this isn't a major priority for me yet.
     //
     template<typename O, typename...TArgs>
-    RC Async( void ( O::*pM )( typename move_value<TArgs>::type... ), O* pO, TArgs&&...args )
+    RC Async( void ( O::*pM )( typename a_sig<TArgs>::type... ), O* pO, TArgs&&...args )
     {
-        using binder_t = object_method_delegate<O, void, typename move_value<TArgs>::type...>;
+        using binder_t = object_method_delegate<O, void, typename a_sig<TArgs>::type...>;
         using method_t = typename T::template call<binder_t, typename std::decay<TArgs>::type...>;
 
         return __enqueue<binder_t, method_t>( binder_t( pO, pM ), std::forward<TArgs>( args )... );
     }
-
-
-    // WIP
-    // 
-    //  The move semantics are nice, but I would like to fully support copy semantics as well.
-    //  It gets complex. I looked into using bind, but the sub-allocations that are done
-    //  and the "difficulty" in obtaining the type makes it difficult. i.e. std::bind calls 
-    //  ::new (or supplied allocator ~IF~ implemented!) to create storage. One of the MAJOR design
-    //  elements of this whole exercise is to AVOID any additional heap use and contention on the
-    //  "global" heap in the process.
     //
-    template<typename O, typename...TArgs>
-    RC AsyncByVal( void ( O::*pM )( typename copy_value<TArgs>::type... ), O* pO, TArgs...args )
-    {
-        using binder_t = object_method_delegate<O, void, typename copy_value<TArgs>::type...>;
-        using method_t = typename T::template call<binder_t, typename std::decay<TArgs>::type...>;
-
-        return __enqueue<binder_t, method_t>( binder_t( pO, pM ), std::forward<TArgs>( args )... );
-    }
-
     // Call any function or lambda. Interestingly the captures in the list don't "really" impact 
     // the function ~signature~ and this routine still allocates the memory properly for any 
     // variables that are included in the capture.
@@ -278,32 +416,30 @@ public:
     //      Async( lambda      );
     //      Async( doit, 42ull );
     //
-    // This version supports any lambda expression or function with arguments.
+    // This version supports any lambda expression or function/functor with arguments.
     //
     //  Notes:
-    //      You are likely to encounter challenges if you try and call an operator overload on 
+    //      You are likely to encounter challenges if you try and call an operator overload on
     //      an object via Async. (It is doable, but the syntax is hairy and it is likely easier
-    //      to create a lambda expression.) While you can use std::function it is redundant 
+    //      to create a lambda expression.) While you can use std::function it is redundant
     //      and will just add extra overhead with no gain.
     //
-    // TFunc:   Any expression that evaluates to a function call or lambda expression.
-    // TArgs:   Zero or more arguments
+    // TFunc    Any expression that evaluates to a function call or lambda expression.
+    //          Note that this member will make a copy of some objects and forward the
+    //          copy along depending on how it is used.
+    //
+    // TArgs    Zero or more arguments
     //
     template<typename TFunc,typename...TArgs>
     typename std::enable_if< m_valid<TFunc>::value, RC>::type
-    /* RC */ Async( TFunc f, TArgs&&...args )
+    /* RC */ Async(TFunc f, TArgs&&...args )
     {
         using namespace std;
-        using method_t = typename T::template call<TFunc,typename move_value<TArgs>::type...>;
+        using method_t = typename T::template call<TFunc, typename a_sig<TArgs>::type...>;
 
         return __enqueue<TFunc, method_t>( forward<TFunc>( f ), forward<TArgs>( args )... );
     }
-
 };
-
-
-//---------------------------------------------------------------------------------------------------------------------
-// marshal_work_abstract
 //
 //
 //
@@ -315,9 +451,7 @@ protected:
     virtual RC      get_storage(size_t size,void** data)    = 0;
     virtual RC      enqueue_work(i_marshaled_call *)        = 0;
 };
-
+//
 using i_marshal_work = marshal_work < marshal_work_abstract > ;
-
-
 
 ENS( ee5 )

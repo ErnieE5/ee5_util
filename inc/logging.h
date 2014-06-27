@@ -15,6 +15,14 @@
 #pragma once
 #include <ee5>
 
+
+//******
+//  This is cool!!!....
+// http://stackoverflow.com/a/11172679/1855568
+//
+//******
+
+
 #include "stopwatch.h"
 
 #include <cstdint>

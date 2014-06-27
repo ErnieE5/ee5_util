@@ -116,7 +116,7 @@ struct ThreadpoolTest
 
 
 
-//---------------------------------------------------------------------------------------------------------------------
+//-------------------------------------------------------------------------------------------------
 //
 //
 //
@@ -128,7 +128,7 @@ void c_function( size_t y )
 
 
 
-//---------------------------------------------------------------------------------------------------------------------
+//-------------------------------------------------------------------------------------------------
 //
 //
 //
@@ -140,7 +140,7 @@ void t_function( T t )
 }
 
 
-//---------------------------------------------------------------------------------------------------------------------
+//-------------------------------------------------------------------------------------------------
 //
 //
 //
@@ -228,7 +228,7 @@ struct rvalue_test
 
 
 
-//---------------------------------------------------------------------------------------------------------------------
+//-------------------------------------------------------------------------------------------------
 //
 //
 //
@@ -304,9 +304,91 @@ void tst_rvalue_transfers( i_marshal_work* p )
 }
 
 
+struct Foo
+{
+    Foo()
+    { }
+    void Zoink()
+    {
+        LOG_ALWAYS( "Flipper!!!!" );
+    }
+    void Blink( int i )
+    {
+        LOG_ALWAYS( "Flopper.... %i", i );
+    }
+};
+
+Foo f;
 
 
-//---------------------------------------------------------------------------------------------------------------------
+template<typename F, F method, typename O, typename...TArgs>
+class object_instance_binder
+{
+private:
+    O* object;
+
+public:
+    using return_type = decltype( ( std::declval<O>().*method )( std::declval<TArgs>()... ) );
+
+    object_instance_binder() = delete;
+
+    object_instance_binder( O* o ) :
+        object( o )
+    {
+    }
+
+    object_instance_binder( const object_instance_binder& _o ) :
+        object( _o.object )
+    {
+    }
+
+    return_type operator()( TArgs&&...args )
+    {
+        return ( object->*method )( std::move( args )... );
+    }
+};
+
+#define instance_binder(O,M,...) \
+    object_instance_binder< decltype(&O::M), &O::M, O, __VA_ARGS__ >
+
+
+
+using delegate_Zoink = instance_binder( Foo, Zoink );
+using delegate_Blink = instance_binder( Foo, Blink, int );
+
+
+template<typename T,typename H = i_marshal_work>
+struct async_base
+{
+private:
+    H* handler;
+
+public:
+    async_base( async_base&& ) = delete;
+    async_base( H* h )
+    {
+        handler = h;
+    }
+
+    template<typename F, typename...TArgs>
+    RC operator()(const F& f, TArgs&&...args )
+    {
+        return handler->Async( f, std::forward<TArgs>( args )... );
+    }
+
+    template<typename...TArgs>
+    RC operator()( void ( T::*pM )( typename a_sig<TArgs>::type... ), TArgs&&...args )
+    {
+        return handler->Async( pM, static_cast<T*>( this ), std::forward<TArgs>( args )... );
+    }
+};
+
+
+
+
+
+
+//-------------------------------------------------------------------------------------------------
 //
 //
 //
@@ -336,6 +418,14 @@ RC FunctionTests()
     //{
     //    std::this_thread::yield();
     //}
+    delegate_Zoink dz( &f );
+    delegate_Blink db( &f );
+
+    dz();
+    db(15);
+
+    async( dz );
+    async( db, 25 );
 
     async( [](){ LOG_ALWAYS( "", "" ); } );
 
@@ -368,25 +458,34 @@ RC FunctionTests()
 
 
     std::string s1( "Foo" );
+    std::string value("Hey dude!");
     std::vector<double> dv( { 10.1, 10.2, 10.3, 10.4, 10.5, 10.6, 10.7, 10.8, 10.9 } );
 
-     CRR( async->AsyncByVal( &ThreadpoolTest::TemplateRef,&target,  std::list<double>( { 1.1, 1.2, 1.3, 1.4, 1.5, 1.6 } ) ) );
-     //CRR( asyncByVal( &ThreadpoolTest::TemplateRef,&target,  std::vector<int>(  { 1, 2, 3, 4, 5 } )                ) );
-     //CRR( asyncByVal( &ThreadpoolTest::TemplateRef,&target,  dv                                                    ) );
-     //CRR( asyncByVal( &ThreadpoolTest::CopyString,&target,  s1 ) );
+    async( [](std::string s)  { /*...*/ }, std::string( value ) );  
+    async( [](std::string& s) { /*...*/ }, byval( value ) );
 
+    using lid = std::list < double > ;
+    lid dl( { 1.1, 1.2, 1.3, 1.4, 1.5, 1.6 } );
 
-    CRR( async( &ThreadpoolTest::MoveString, &target, std::string( "Ernie" ) ) );
+    // The following async calls need to be "by value" because the target template
+    // has a reference type.
+    //
+    CRR( async( &ThreadpoolTest::TemplateRef, &target, byval( dl ) ) );
+    CRR( async( &ThreadpoolTest::TemplateRef, &target, byval( std::vector<int>( { 1, 2, 3, 4, 5 } ) ) ) );
+    CRR( async( &ThreadpoolTest::TemplateRef, &target, byval( dv ) ) );
+    CRR( async( &ThreadpoolTest::CopyString,  &target, byval( s1 ) ) );
+
+    CRR( async( &ThreadpoolTest::MoveString,  &target, std::string( "Ernie" ) ) );
 
     //
     //
-    std::list<int> li( { 1, 2, 3, 4, 5, 6 } );
-    CRR( async( &ThreadpoolTest::ScalarAndContainer, &target, 1, 1.1, std::move( li ) ) );
+    std::list<int> li( { 1, 2, 3, 4, 5, 6 } ); // li is ~moved~ by default!
+    CRR( async( &ThreadpoolTest::ScalarAndContainer, &target, 1, 1.1, li ) );
 
 
     // Template Member Calls
     //
-    CRR( async( &ThreadpoolTest::Template<std::string>, &target, std::string( "Ewert" ) ) );
+    CRR( async( &ThreadpoolTest::Template, &target, std::string( "Ewert" ) ) );
     CRR( async( &ThreadpoolTest::Template, &target, 5.5 ) );
     CRR( async( &ThreadpoolTest::Template, &target, 0x1000200030004000ll ) );
     CRR( async( &ThreadpoolTest::Template, &target, 0xF000E000D000C000 ) );
@@ -402,14 +501,14 @@ RC FunctionTests()
 
 
     int h = 0;  // This value is just used for lambda capture testing in the following
-    // tests that use lambda expressions.
+                // tests that use lambda expressions.
 
     // Lambda Expression void(void) with capture by value of local
     // variable.
     //
     for( size_t c = 0; c < 5; ++c )
     {
-        CRR( async( [&]()
+        CRR( async( [h]()
         {
             LOG_UNAME("Lambda [h]()","[h]:%i", h );
         } ) );
@@ -423,10 +522,10 @@ RC FunctionTests()
         CRR( async( c_function, i ) );
     }
 
-    //// Template Function
-    ////
-    CRR( async( t_function<int>, 5 ) );
-    CRR( async( t_function<size_t>, 6 ) );
+    // Template Function
+    //
+    CRR( async( t_function<int>,    5    ) );
+    CRR( async( t_function<size_t>, 6ull ) );
 
 
     ee5_alignas( 128 )
@@ -434,8 +533,7 @@ RC FunctionTests()
                             // and is done via a capture. The sum at the end of the test should
     cc = 0;                 // be equal to 7777777.
 
-    // Lambda capture with three scalar arguments called locally
-    // and queued later,
+    // Lambda capture with two scalar arguments called locally and queued later,
     //
     auto q = [&cc](size_t a,double b)
     {
@@ -446,9 +544,9 @@ RC FunctionTests()
             ld += ThreadpoolTest::Factorial(25);
         }
 
-        // This should never happen, but the optimizer is too good
-        // and will completely compile this code away if there is
-        // NOT a chance that the calculated value is never used.
+        // This should never happen, but the LLVM optimizer is too good and will completely 
+        // compile this code away if there is NOT a chance that the calculated value is never 
+        // used.
         //
         if( ld == 0 )
         {
@@ -510,9 +608,9 @@ RC FunctionTests()
         std::this_thread::yield();
     }
 
-    //     assert( cc == 7777777 );
-    //
-    //     LOG_ALWAYS("cc == %llu", cc.load() );
+    assert( cc == 7777777 );
+    
+    LOG_ALWAYS("cc == %llu", cc.load() );
 
     LOG_ALWAYS( "Asta........", "" );
 
@@ -527,7 +625,7 @@ RC FunctionTests()
 
 
 
-//---------------------------------------------------------------------------------------------------------------------
+//-------------------------------------------------------------------------------------------------
 //
 //
 //
