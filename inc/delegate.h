@@ -61,12 +61,12 @@ public:
 
     TReturn operator()( TArgs&&...args )
     {
-        return ( object->*method )( std::move( args )... );
+        return ( object->*method )( std::forward<TArgs>( args )... );
     }
 };
 
 
-// This is just a skeleton of an idea. I dislike heavy macro usage, but a large amount 
+// This is just a skeleton of an idea. I dislike heavy macro usage, but a large amount
 // of the "hate" of macros has been transferred to template meta programming at the moment! :-O
 //
 template<typename F, F method, typename O, typename...TArgs>

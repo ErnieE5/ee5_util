@@ -150,7 +150,8 @@ public:
 
     // type is the object that is wrapped or void if testing an object that wasn't wrapped
     //
-    using               type    = typename wrapped_type::type;
+    using type     = typename wrapped_type::type;
+    using type_ref = typename std::add_lvalue_reference<type>::type;
 };
 //
 // The template expansion routines end up always expanding the arguments even if the
@@ -178,9 +179,10 @@ using select_base = typename
 // copy_movable is used to adapt a normally movable/moved object when you REALLY want to
 // make a copy and not give up the resources.
 //
-template<typename T, typename B = select_base<T> >
-struct copy_movable : B
+template<typename T>
+struct copy_movable : select_base<T>
 {
+    using base = select_base<T>;
     // This is a "magic" signature to allow for testing if an object ~is~ an implementation
     // of copy_movable for argument conversion. It is never called, just declared.
     //
@@ -192,13 +194,13 @@ struct copy_movable : B
     //
     using type = typename std::add_lvalue_reference<T>::type;
 
-    copy_movable( copy_movable&& o ) : 
-        B( std::move( static_cast<B&&>(o) ) )
+    copy_movable( copy_movable&& o ) :
+        base( std::move( static_cast<base&&>(o) ) )
     {
     }
 
-    copy_movable( T&& t ) : 
-        B( std::forward<T>(t) )
+    copy_movable( T&& t ) :
+        base( std::forward<T>(t) )
     {
     }
 };
@@ -235,10 +237,10 @@ auto byval( T i ) -> copy_movable<typename std::decay<T>::type>
 // function operator().  Depending on how this template is constructed, the method will be invoked
 // with the arguments supplied.
 //
-// By default a complex object is MOVED into the tuple UNLESS the user elects to specifically use 
+// By default a complex object is MOVED into the tuple UNLESS the user elects to specifically use
 // the byval() modifier function to explicitly create a copy of the object being marshaled.
 //
-// Complex objects that are sent byval() should have a reference value in the method signature. 
+// Complex objects that are sent byval() should have a reference value in the method signature.
 //
 template<typename TFunction, typename TReturn, typename ...TArgs>
 class marshal_delegate
@@ -256,7 +258,7 @@ private:
         typedef sequence<S...> type;
     };
 
-    // Data type of the tuple container for the marshaled data and the declaration 
+    // Data type of the tuple container for the marshaled data and the declaration
     // for the unpack of the arguments.
     //
     using storage_t = std::tuple < typename std::decay< TArgs >::type... >;
@@ -272,25 +274,25 @@ private:
     template< size_t N >
     using types = typename std::tuple_element< N, storage_t >::type;
 
-    // Empty selectors that use SFINAE selection of the way the arguments need to be 
+    // Empty selectors that use SFINAE selection of the way the arguments need to be
     // sent to the target routine.
     //
     struct moved_a { };
     struct byval_a { };
 
-    // Select type for forwarding if the item was captured (moved/default behavior) 
+    // Select type for forwarding if the item was captured (moved/default behavior)
     // or if the item was explicitly sent by value.
     //
     template< size_t N >
     using st = typename std::conditional< is_byval< types< N > >::value, byval_a, moved_a >::type;
 
-    // By default the items are captured and moved if the object has a move constructor 
+    // By default the items are captured and moved if the object has a move constructor
     // defined. This is the typical selector and the items are extracted from the tuple
     // and sent to the target function.
     //
     template< size_t N, typename R = types<N>&& >
     R send( moved_a )
-    {   
+    {
         //     Move the item OUT of the tuple to the called routine.
         //     |
         return std::move( std::get<N>( values ) );
@@ -300,7 +302,7 @@ private:
     // need to tell the compiler that we should send a reference to the base object to the
     // target routine.
     //
-    template< size_t N, typename R = typename is_byval<types<N>>::type& >
+    template< size_t N, typename R = typename is_byval<types<N>>::type_ref >
     R send( byval_a )
     {
         //     Explicitly select the base object, not the wrapper
@@ -308,8 +310,8 @@ private:
         return static_cast<R>( std::get<N>( values ) );
     }
 
-    // This routine is the result of a large amount of template magic that pulls all of the items 
-    // out of the tuple and calls the method, function, functor, or lamda captured in the method 
+    // This routine is the result of a large amount of template magic that pulls all of the items
+    // out of the tuple and calls the method, function, functor, or lamda captured in the method
     // with the arguments.
     //
     template<size_t...S>
@@ -323,8 +325,8 @@ private:
         //                  |      |       |
         //                  |-------       Expand the argument pack
         //                  |
-        //                  S the type is a size_t value that is incremented from 0 to the 
-        //                  number of arguments in the tuple. Keep in mind that if the 
+        //                  S the type is a size_t value that is incremented from 0 to the
+        //                  number of arguments in the tuple. Keep in mind that if the
         //                  function type is void(void) then this expression is empty.
     }
 
@@ -348,7 +350,7 @@ public:
 //  instead of copying. As the containers aren't thread safe (by default) this avoids extra
 //  copies. A nifty implication of this is that it you keep your data in a "safely" copied
 //  object that has a move constructor, only one thread can use the data at a given time. (Use
-//  as a state like object.) If you ~don't~ want this default behavior, use the byval() function 
+//  as a state like object.) If you ~don't~ want this default behavior, use the byval() function
 //  to explicitly declare you really WANT to make a deep copy of the object.
 //
 template<typename Arg>
@@ -388,11 +390,11 @@ struct f_valid
 {
     using notptr = typename std::remove_pointer<F>::type;
 
-    using type = typename 
+    using type = typename
         std::conditional <
         /* if   */ std::is_class< notptr >::value || std::is_function< notptr >::value,
         /* then */ typename std::true_type,
-        /* else */ typename std::false_type 
+        /* else */ typename std::false_type
         >::type;
 
     static const typename type::value_type value = type::value;

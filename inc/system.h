@@ -61,9 +61,9 @@ struct async_call
     static i_marshal_work* tp;
 
     template<typename F,typename...TArgs>
-    RC operator()(const F& f, TArgs&&...args )
+    RC operator()(F f, TArgs&&...args )
     {
-        return tp->Async( f, std::forward<TArgs>( args )... );
+        return tp->Async( std::forward<F>(f), std::forward<TArgs>( args )... );
     }
 
     template<typename O, typename...TArgs>
