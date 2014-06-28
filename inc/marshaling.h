@@ -439,7 +439,13 @@ private:
         {
             P* call = nullptr;
 
-            // Acquire the memory to construct the arguments to be marshaled
+            // Acquire the memory to construct the arguments to be marshaled if the enqueue_work
+            // call fails, the underlying routine is REQUIRED to reclaim the memory acquired by
+            // get storage. With the variadic template support, the requirement for the allocation
+            // routines to be on the other side of an abstract class is relaxed. However, this
+            // marshaling front end doesn't have a performance penalty when a non-abstract base
+            // class is used.  (Depending on the compiler, almost everything can get fully 
+            // inlined in that case.)
             //
             rc = get_storage( sizeof( P ), reinterpret_cast<void**>( &call ) );
 
