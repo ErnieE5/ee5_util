@@ -15,9 +15,41 @@
 #pragma once
 #include <ee5>
 
+#include <memory>
+
 #include <error.h>
 #include <cstddef>
+
+
+#ifndef _MSC_VER
+#include <cxxabi.h>
+#include <utility>
+#include <typeinfo>
+#include <cstdlib>
+#include <stdio.h>
+struct distroy_abi { void operator()(void* buffer) { free(buffer); } };
+using abi_name = std::unique_ptr<char,distroy_abi>;
+
+template<typename T>
+abi_name typeidname()
+{
+    int status = 0;
+    return abi_name( abi::__cxa_demangle(typeid(T).name(),nullptr,nullptr,&status) );
+}
+#else
+struct abi_name
+{
+    const char * name;
+    const char * get() { return name + 6; }
+};
+template<typename T> abi_name typeidname() { return { typeid(T).name() }; }
+#endif
+
+
+
 #include <marshaling.h>
+
+
 
 BNS( ee5 )
 
@@ -57,6 +89,10 @@ void    tp_stop();
 size_t  tp_pending();
 size_t  tp_count();
 void    tp_park( size_t c );
+
+
+
+
 
 
 ENS( ee5 )

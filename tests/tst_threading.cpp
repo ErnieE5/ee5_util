@@ -148,79 +148,79 @@ void t_function( T t )
 std::array<size_t, 9> p10 = { { 1ull, 10ull, 100ull, 1000ull, 10000ull, 100000ull, 1000000ull, 10000000ull, 100000000ull } };
 struct rvalue_test
 {
-    using lsize_t = std::vector < size_t > ;
-
-    ee5_alignas(64)
-    std::atomic_size_t          pending;
-    std::array<ptrdiff_t, 9>    rvalue_transfers;
-    ee5_alignas( 64 )
-    spin_flag                   lock;
-    lsize_t                     complete;
-
-
-    void join( lsize_t add )
-    {
-        us_stopwatch_f x;
-        framed_lock( lock, [&]()
-        {
-            LOG_UNAME( "jtst", "0x%.16lx Items %11lu  Time: %12.0f us join delay", add.data(), add.size(), x.delta() );
-            complete.push_back( add.size() );
-        } );
-        LOG_UNAME( "jtst", "0x%.16lx Items %11lu  Time: %12.0f us join", add.data(), add.size(), x.delta() );
-
-        ptrdiff_t a = reinterpret_cast<ptrdiff_t>( add.data() );
-        ptrdiff_t b = rvalue_transfers[add[0]];
-
-        LOG_UNAME( "jtst", "0x%.16lx Items %11lu %s 0x%.16lx", a, add.size(), a == b ? "==" : "!=", b );
-        --pending;
-    }
-
-    void inner( lsize_t v1 )
-    {
-        us_stopwatch_f t;
-        std::generate( v1.begin() + 1, v1.end(), []()->size_t{ return std::rand(); } );
-        LOG_UNAME( "jtst", "0x%.16lx Items %11lu  Time: %12.0f us inner", v1.data(), v1.size(), t.delta() );
-
-        p->Async( &rvalue_test::join, this, std::move( v1 ) );
-    }
-
-    void outer( size_t num )
-    {
-        us_stopwatch_f t;
-
-        lsize_t v( p10[num] );
-
-        v[0] = num;
-
-        rvalue_transfers[num] = reinterpret_cast<ptrdiff_t>( v.data() );
-
-        size_t* addr = v.data();
-
-        p->Async( &rvalue_test::inner, this, std::move( v ) );
-
-        LOG_UNAME( "jtst", "0x%.16lx Items %11lu  Time: %12.0f us outer", addr, p10[num], t.delta() );
-    };
-
-    i_marshal_work* p;
-
-    rvalue_test( i_marshal_work* _p ) : p( _p )
-    {
-        pending = 0;
-
-        // This test "adds" more time by creating a large amount of work
-        // by doing "heap stuff" on a number of threads.
-        //
-        for(size_t size = 0; size < p10.size(); ++size)
-        {
-            p->Async( &rvalue_test::outer, this, size );
-            ++pending;
-        }
-
-        while( pending )
-        {
-            std::this_thread::yield();
-        }
-    }
+//     using lsize_t = std::vector < size_t > ;
+//
+//     ee5_alignas(64)
+//     std::atomic_size_t          pending;
+//     std::array<ptrdiff_t, 9>    rvalue_transfers;
+//     ee5_alignas( 64 )
+//     spin_flag                   lock;
+//     lsize_t                     complete;
+//
+//
+//     void join( lsize_t add )
+//     {
+//         us_stopwatch_f x;
+//         framed_lock( lock, [&]()
+//         {
+//             LOG_UNAME( "jtst", "0x%.16lx Items %11lu  Time: %12.0f us join delay", add.data(), add.size(), x.delta() );
+//             complete.push_back( add.size() );
+//         } );
+//         LOG_UNAME( "jtst", "0x%.16lx Items %11lu  Time: %12.0f us join", add.data(), add.size(), x.delta() );
+//
+//         ptrdiff_t a = reinterpret_cast<ptrdiff_t>( add.data() );
+//         ptrdiff_t b = rvalue_transfers[add[0]];
+//
+//         LOG_UNAME( "jtst", "0x%.16lx Items %11lu %s 0x%.16lx", a, add.size(), a == b ? "==" : "!=", b );
+//         --pending;
+//     }
+//
+//     void inner( lsize_t v1 )
+//     {
+//         us_stopwatch_f t;
+//         std::generate( v1.begin() + 1, v1.end(), []()->size_t{ return std::rand(); } );
+//         LOG_UNAME( "jtst", "0x%.16lx Items %11lu  Time: %12.0f us inner", v1.data(), v1.size(), t.delta() );
+//
+//         p->Async( &rvalue_test::join, this, std::move( v1 ) );
+//     }
+//
+//     void outer( size_t num )
+//     {
+//         us_stopwatch_f t;
+//
+//         lsize_t v( p10[num] );
+//
+//         v[0] = num;
+//
+//         rvalue_transfers[num] = reinterpret_cast<ptrdiff_t>( v.data() );
+//
+//         size_t* addr = v.data();
+//
+//         p->Async( &rvalue_test::inner, this, std::move( v ) );
+//
+//         LOG_UNAME( "jtst", "0x%.16lx Items %11lu  Time: %12.0f us outer", addr, p10[num], t.delta() );
+//     };
+//
+//     i_marshal_work* p;
+//
+//     rvalue_test( i_marshal_work* _p ) : p( _p )
+//     {
+//         pending = 0;
+//
+//         // This test "adds" more time by creating a large amount of work
+//         // by doing "heap stuff" on a number of threads.
+//         //
+//         for(size_t size = 0; size < p10.size(); ++size)
+//         {
+//             p->Async( &rvalue_test::outer, this, size );
+//             ++pending;
+//         }
+//
+//         while( pending )
+//         {
+//             std::this_thread::yield();
+//         }
+//     }
 
 };
 
@@ -388,6 +388,7 @@ public:
 
 
 
+
 //-------------------------------------------------------------------------------------------------
 //
 //
@@ -403,219 +404,260 @@ RC FunctionTests()
     int             int_local = 55555;
     double          double_local = 55.555;
 
-    //us_stopwatch_s tpmf;
-    //rvalue_test x( &tp );
-    //size_t pmftime = tpmf.delta();
-
-    //us_stopwatch_s tlambda;
-    //tst_rvalue_transfers( &tp );
-    //size_t lambdas = tlambda.delta();
-
-    //LOG_UNAME( "jtst", "Labmda's   :%llu us", lambdas );
-    //LOG_UNAME( "jtst", "PMF's      :%llu us", pmftime );
-
-    //while( tp.Pending() )
-    //{
-    //    std::this_thread::yield();
-    //}
-//    delegate_Zoink dz( &f );
-    delegate_Blink db( &f );
-
-//    dz();
-    db(15);
-
-//    async( dz );
-    async( db, 25 );
-
-    async( [](){ LOG_ALWAYS( "", "" ); } );
-
-    async( [&]() { LOG_ALWAYS( "Local value (captured) %i %lf", int_local, double_local ); } );
-
-    // This is "dumb" but it works.
-    //
-    async( [&](void(ThreadpoolTest::* pmf)(int,double,size_t ))
+    auto f = [](std::string& s1,std::string s2)
     {
-        (target.*pmf)( 5, 5.5, 5555555555ull );
-
-    }, &ThreadpoolTest::ScalarTypes );
-
-
-    // Scalar Types
-    //
-    CRR( async( &ThreadpoolTest::ScalarTypes, &target, 1, 11.1, size_t( 1000000000000000ull ) ) );
-
-
-    // Factorial Work Product
-    //
-    for(size_t n=1;n<26;++n)
-    {
-        CRR( async( &ThreadpoolTest::CalcFactorial, &target, n ) );
-    }
-
-    // 9 Argument Support
-    //
-    CRR( async( &ThreadpoolTest::NineArgs, &target, 1, 2, 3, 4, 5, 6, 7, 8, 9 ) );
-
-
-    std::string s1( "Foo" );
-    std::string value("Hey dude!");
-    std::vector<double> dv( { 10.1, 10.2, 10.3, 10.4, 10.5, 10.6, 10.7, 10.8, 10.9 } );
-
-    async( [](std::string s)  { /*...*/ }, std::string( value ) );
-//    async( [](std::string& s) { /*...*/ }, byval( value ) );
-
-    using lid = std::list < double > ;
-    lid dl( { 1.1, 1.2, 1.3, 1.4, 1.5, 1.6 } );
-
-    // The following async calls need to be "by value" because the target template
-    // has a reference type.
-    //
-    // CRR( async( &ThreadpoolTest::TemplateRef, &target, byval( dl ) ) );
-    // CRR( async( &ThreadpoolTest::TemplateRef, &target, byval( std::vector<int>( { 1, 2, 3, 4, 5 } ) ) ) );
-    // CRR( async( &ThreadpoolTest::TemplateRef, &target, byval( dv ) ) );
-    // CRR( async( &ThreadpoolTest::CopyString,  &target, byval( s1 ) ) );
-
-    CRR( async( &ThreadpoolTest::MoveString,  &target, std::string( "Ernie" ) ) );
-
-    //
-    //
-    std::list<int> li( { 1, 2, 3, 4, 5, 6 } ); // li is ~moved~ by default!
-    CRR( async( &ThreadpoolTest::ScalarAndContainer, &target, 1, 1.1, li ) );
-
-
-    // Template Member Calls
-    //
-    CRR( async( &ThreadpoolTest::Template, &target, std::string( "Ewert" ) ) );
-    CRR( async( &ThreadpoolTest::Template, &target, 5.5 ) );
-    CRR( async( &ThreadpoolTest::Template, &target, 0x1000200030004000ll ) );
-    CRR( async( &ThreadpoolTest::Template, &target, 0xF000E000D000C000 ) );
-    CRR( async( &ThreadpoolTest::Template, &target, static_cast<char>( 0x45 ) ) );
-    CRR( async( &ThreadpoolTest::Template, &target, &double_local ) );
-
-    // Scaler Types as references
-    //
-    CRR( async( &ThreadpoolTest::ScalarTypes, &target, int_local, double_local, sizeof( unsigned ) ) );
-    CRR( async( &ThreadpoolTest::ScalarTypes, &target, int_local, double_local, sizeof( size_t ) ) );
-    CRR( async( &ThreadpoolTest::ScalarTypes, &target, int_local, double_local, sizeof( unsigned long ) ) );
-    CRR( async( &ThreadpoolTest::ScalarTypes, &target, int_local, double_local, sizeof( unsigned long long ) ) );
-
-
-    int h = 0;  // This value is just used for lambda capture testing in the following
-                // tests that use lambda expressions.
-
-    // Lambda Expression void(void) with capture by value of local
-    // variable.
-    //
-    for( size_t c = 0; c < 5; ++c )
-    {
-        CRR( async( [h]()
-        {
-            LOG_UNAME("Lambda [h]()","[h]:%i", h );
-        } ) );
-        ++h;
-    }
-
-    // Calling "naked" C function with a single argument
-    //
-    for(size_t i = 0;i < 2;++i)
-    {
-        CRR( async( c_function, i ) );
-    }
-
-    // Template Function
-    //
-    CRR( async( t_function<int>,    5    ) );
-    CRR( async( t_function<size_t>, 6ull ) );
-
-
-    ee5_alignas( 128 )
-    std::atomic_ulong cc;   // This value is used to sum the number of calls to the lambda "q"
-                            // and is done via a capture. The sum at the end of the test should
-    cc = 0;                 // be equal to 7777777.
-
-    // Lambda capture with two scalar arguments called locally and queued later,
-    //
-    auto q = [&cc](size_t a,double b)
-    {
-        long double ld = std::rand() * b;
-
-        for(size_t i = 0;i < 10000;i++)
-        {
-            ld += ThreadpoolTest::Factorial(25);
-        }
-
-        // This should never happen, but the LLVM optimizer is too good and will completely
-        // compile this code away if there is NOT a chance that the calculated value is never
-        // used.
-        //
-        if( ld == 0 )
-        {
-            LOG_UNAME("Lambda q","ld: %20.20lg",ld);
-        }
-
-        cc++; // The atomically incremented value
+        LOG_ALWAYS("%s %s\n",s1.c_str(),s2.c_str());
     };
+    using F = decltype(f);
 
-    ++h;
+    auto a = byval( std::string("Ernie") );
 
-    // Lambda capture (h) with three arguments, queued inline
-    //
-    CRR( async( [h]( int a, double b, int c )
-    {
-        LOG_UNAME("Lambda [h](int a,double b, int c)", "[h]:%i a:%i b:%g c:%i", h, a, b, c );
-    }, 1 ,1.1, 1 ) );
-
-    CRR( async( q, 2, 2.2 ) );
+    using A = decltype( a );
 
 
-    LOG_ALWAYS("Starting...","");
-
-    ms_stopwatch_f t1a;
-    for(size_t g = 0;g < 2525252; g++)
-    {
-        RC rc;
-        do
-        {
-            rc = async( q, 3, g*.3 );
-            if(rc!=s_ok())
-            {
-                std::this_thread::yield();
-            }
-        }
-        while( s_ok() != rc );
-    }
-    LOG_ALWAYS("Phase One Complete... %5.3lf ms",t1a.delta<std::milli>());
-
-    ms_stopwatch_f t2a;
-    for(size_t g = 0;g < 5252524; g++)
-    {
-        RC rc;
-        do
-        {
-            rc = async( q, 4, g*.4 );
-            if(rc!=s_ok())
-            {
-                std::this_thread::yield();
-            }
-        }
-        while( s_ok() != rc );
-    }
-    LOG_ALWAYS( "Phase Two Complete... %5.3lf ms", t2a.delta<std::milli>() );
+    printf("Yo!\n");
 
 
-    while( tp_pending() )
-    {
-        std::this_thread::yield();
-    }
+    auto name = typeidname< A >();
 
-    assert( cc == 7777777 );
+    printf("A: %s\n",name.get());
+    printf("B: %i\n",is_byval<A>::value);
 
-    LOG_ALWAYS("cc == %llu", cc.load() );
+    using method_t = marshal_delegate<F,void,A,std::string>;
 
-    LOG_ALWAYS( "Asta........", "" );
+     std::string dude("Dude");
+//     byval( dude );
+
+
+//    f(a);
+
+     method_t x( f, byval( dude ), std::string("Ernie") );
+
+    x();
+
+    //    async( [](std::string& s) { /*...*/ }, byval( value ) );
+
+
+
 
 
     return s_ok();
+
+
+
+//     //us_stopwatch_s tpmf;
+//     //rvalue_test x( &tp );
+//     //size_t pmftime = tpmf.delta();
+//
+//     //us_stopwatch_s tlambda;
+//     //tst_rvalue_transfers( &tp );
+//     //size_t lambdas = tlambda.delta();
+//
+//     //LOG_UNAME( "jtst", "Labmda's   :%llu us", lambdas );
+//     //LOG_UNAME( "jtst", "PMF's      :%llu us", pmftime );
+//
+//     //while( tp.Pending() )
+//     //{
+//     //    std::this_thread::yield();
+//     //}
+// //    delegate_Zoink dz( &f );
+// //    delegate_Blink db( &f );
+//
+// //    dz();
+// //    db(15);
+//
+// //    async( dz );
+// //    async( db, 25 );
+//
+//     async( [](){ LOG_ALWAYS( "", "" ); } );
+//
+//     async( [&]() { LOG_ALWAYS( "Local value (captured) %i %lf", int_local, double_local ); } );
+//
+//     // This is "dumb" but it works.
+//     //
+//     async( [&](void(ThreadpoolTest::* pmf)(int,double,size_t ))
+//     {
+//         (target.*pmf)( 5, 5.5, 5555555555ull );
+//
+//     }, &ThreadpoolTest::ScalarTypes );
+//
+//
+//     // Scalar Types
+//     //
+//     CRR( async( &ThreadpoolTest::ScalarTypes, &target, 1, 11.1, size_t( 1000000000000000ull ) ) );
+//
+//
+//     // Factorial Work Product
+//     //
+//     for(size_t n=1;n<26;++n)
+//     {
+//         CRR( async( &ThreadpoolTest::CalcFactorial, &target, n ) );
+//     }
+//
+//     // 9 Argument Support
+//     //
+//     CRR( async( &ThreadpoolTest::NineArgs, &target, 1, 2, 3, 4, 5, 6, 7, 8, 9 ) );
+//
+//
+//     std::string s1( "Foo" );
+//     std::string value("Hey dude!");
+//     std::vector<double> dv( { 10.1, 10.2, 10.3, 10.4, 10.5, 10.6, 10.7, 10.8, 10.9 } );
+//
+//     async( [](std::string s)  { /*...*/ }, std::string( value ) );
+// //    async( [](std::string& s) { /*...*/ }, byval( value ) );
+//
+//     using lid = std::list < double > ;
+//     lid dl( { 1.1, 1.2, 1.3, 1.4, 1.5, 1.6 } );
+//
+//     // The following async calls need to be "by value" because the target template
+//     // has a reference type.
+//     //
+//     // CRR( async( &ThreadpoolTest::TemplateRef, &target, byval( dl ) ) );
+//     // CRR( async( &ThreadpoolTest::TemplateRef, &target, byval( std::vector<int>( { 1, 2, 3, 4, 5 } ) ) ) );
+//     // CRR( async( &ThreadpoolTest::TemplateRef, &target, byval( dv ) ) );
+//     // CRR( async( &ThreadpoolTest::CopyString,  &target, byval( s1 ) ) );
+//
+//     CRR( async( &ThreadpoolTest::MoveString,  &target, std::string( "Ernie" ) ) );
+//
+//     //
+//     //
+//     std::list<int> li( { 1, 2, 3, 4, 5, 6 } ); // li is ~moved~ by default!
+//     CRR( async( &ThreadpoolTest::ScalarAndContainer, &target, 1, 1.1, li ) );
+//
+//
+//     // Template Member Calls
+//     //
+//     CRR( async( &ThreadpoolTest::Template, &target, std::string( "Ewert" ) ) );
+//     CRR( async( &ThreadpoolTest::Template, &target, 5.5 ) );
+//     CRR( async( &ThreadpoolTest::Template, &target, 0x1000200030004000ll ) );
+//     CRR( async( &ThreadpoolTest::Template, &target, 0xF000E000D000C000 ) );
+//     CRR( async( &ThreadpoolTest::Template, &target, static_cast<char>( 0x45 ) ) );
+//     CRR( async( &ThreadpoolTest::Template, &target, &double_local ) );
+//
+//     // Scaler Types as references
+//     //
+//     CRR( async( &ThreadpoolTest::ScalarTypes, &target, int_local, double_local, sizeof( unsigned ) ) );
+//     CRR( async( &ThreadpoolTest::ScalarTypes, &target, int_local, double_local, sizeof( size_t ) ) );
+//     CRR( async( &ThreadpoolTest::ScalarTypes, &target, int_local, double_local, sizeof( unsigned long ) ) );
+//     CRR( async( &ThreadpoolTest::ScalarTypes, &target, int_local, double_local, sizeof( unsigned long long ) ) );
+//
+//
+//     int h = 0;  // This value is just used for lambda capture testing in the following
+//                 // tests that use lambda expressions.
+//
+//     // Lambda Expression void(void) with capture by value of local
+//     // variable.
+//     //
+//     for( size_t c = 0; c < 5; ++c )
+//     {
+//         CRR( async( [h]()
+//         {
+//             LOG_UNAME("Lambda [h]()","[h]:%i", h );
+//         } ) );
+//         ++h;
+//     }
+//
+//     // Calling "naked" C function with a single argument
+//     //
+//     for(size_t i = 0;i < 2;++i)
+//     {
+//         CRR( async( c_function, i ) );
+//     }
+//
+//     // Template Function
+//     //
+//     CRR( async( t_function<int>,    5    ) );
+//     CRR( async( t_function<size_t>, 6ull ) );
+//
+//
+//     ee5_alignas( 128 )
+//     std::atomic_ulong cc;   // This value is used to sum the number of calls to the lambda "q"
+//                             // and is done via a capture. The sum at the end of the test should
+//     cc = 0;                 // be equal to 7777777.
+//
+//     // Lambda capture with two scalar arguments called locally and queued later,
+//     //
+//     auto q = [&cc](size_t a,double b)
+//     {
+//         long double ld = std::rand() * b;
+//
+//         for(size_t i = 0;i < 10000;i++)
+//         {
+//             ld += ThreadpoolTest::Factorial(25);
+//         }
+//
+//         // This should never happen, but the LLVM optimizer is too good and will completely
+//         // compile this code away if there is NOT a chance that the calculated value is never
+//         // used.
+//         //
+//         if( ld == 0 )
+//         {
+//             LOG_UNAME("Lambda q","ld: %20.20lg",ld);
+//         }
+//
+//         cc++; // The atomically incremented value
+//     };
+//
+//     ++h;
+//
+//     // Lambda capture (h) with three arguments, queued inline
+//     //
+//     CRR( async( [h]( int a, double b, int c )
+//     {
+//         LOG_UNAME("Lambda [h](int a,double b, int c)", "[h]:%i a:%i b:%g c:%i", h, a, b, c );
+//     }, 1 ,1.1, 1 ) );
+//
+//     CRR( async( q, 2, 2.2 ) );
+//
+//
+//     LOG_ALWAYS("Starting...","");
+//
+//     ms_stopwatch_f t1a;
+//     for(size_t g = 0;g < 2525252; g++)
+//     {
+//         RC rc;
+//         do
+//         {
+//             rc = async( q, 3, g*.3 );
+//             if(rc!=s_ok())
+//             {
+//                 std::this_thread::yield();
+//             }
+//         }
+//         while( s_ok() != rc );
+//     }
+//     LOG_ALWAYS("Phase One Complete... %5.3lf ms",t1a.delta<std::milli>());
+//
+//     ms_stopwatch_f t2a;
+//     for(size_t g = 0;g < 5252524; g++)
+//     {
+//         RC rc;
+//         do
+//         {
+//             rc = async( q, 4, g*.4 );
+//             if(rc!=s_ok())
+//             {
+//                 std::this_thread::yield();
+//             }
+//         }
+//         while( s_ok() != rc );
+//     }
+//     LOG_ALWAYS( "Phase Two Complete... %5.3lf ms", t2a.delta<std::milli>() );
+//
+//
+//     while( tp_pending() )
+//     {
+//         std::this_thread::yield();
+//     }
+//
+//     assert( cc == 7777777 );
+//
+//     LOG_ALWAYS("cc == %llu", cc.load() );
+//
+//     LOG_ALWAYS( "Asta........", "" );
+//
+//
+//     return s_ok();
 }
 
 

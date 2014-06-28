@@ -38,26 +38,6 @@ static long double Factorial(size_t n,long double a = 1)
     return Factorial(n-1, a * n );
 }
 
-#ifndef _MSC_VER
-#include <cxxabi.h>
-#include <utility>
-struct distroy_abi { void operator()(void* buffer) { free(buffer); } };
-using abi_name = std::unique_ptr<char,distroy_abi>;
-
-template<typename T>
-abi_name typeidname()
-{
-    int status = 0;
-    return abi_name( abi::__cxa_demangle(typeid(T).name(),nullptr,nullptr,&status) );
-}
-#else
-struct abi_name
-{
-    const char * name;
-    const char * get() { return name + 6; }
-};
-template<typename T> abi_name typeidname() { return { typeid(T).name() }; }
-#endif
 
 struct stats
 {

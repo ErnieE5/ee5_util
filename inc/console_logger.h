@@ -15,6 +15,7 @@
 #pragma once
 #include <ee5>
 
+
 #include <error.h>
 #include <logging.h>
 #include <workthread.h>
@@ -29,6 +30,7 @@
 #include <chrono>
 #include <thread>
 #include <cstdio>
+
 
 BNS( ee5 )
 
@@ -134,7 +136,7 @@ private:
 
 #ifdef _MSC_VER
         auto  fraction  = c::duration_cast<milli>(d).count();
-        printf( "[%s.%03luZ]|%s|:%lx %s %s\n", buf, fraction, pLL->info->facility, pLL->id, pLL->info->function, pLL->msg ); 
+        printf( "[%s.%03luZ]|%s|:%lx %s %s\n", buf, fraction, pLL->info->facility, pLL->id, pLL->info->function, pLL->msg );
 #else
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wformat"

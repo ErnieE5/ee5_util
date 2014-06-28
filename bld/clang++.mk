@@ -182,13 +182,25 @@ ifeq ($(strip $(CPP_11_OFF)),)
 C_STD+= -std=c++11
 endif
 
+
+ifeq ($(O_TYPE),release)
+DEFINES+= \
+	NDEBUG=1
+endif
+
+
 #
 # Default to Link Time Optimization unless explicitly disabled.
 #
+
 ifeq ($(strip $(NO_LTO)),)
-L_FLAGS+= -flto
+ ifeq ($(O_TYPE),release)
+  L_FLAGS+= -flto
+ else
+  L_FLAGS+= -fPIC
+ endif
 else
-L_FLAGS+= -fPIC
+ L_FLAGS+= -fPIC
 endif
 
 ifeq ($(strip $(SYMBOLS)),1)

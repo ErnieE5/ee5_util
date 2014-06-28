@@ -20,6 +20,9 @@ TARGET:=ee5util_ft
 
 SYMBOLS=1
 
+WARNINGS=no-unused-value
+FARGUMENTS=diagnostics-show-template-tree
+
 LIBS+=\
 	ee5_util
 
