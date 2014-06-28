@@ -91,6 +91,8 @@ L_BIN:=$(BIN_STAGING)/$(O_AT)
 L_LIB:=$(LIB_STAGING)/$(O_AT)
 
 
+ALL_CREATED_FILES=$(O_TARG) $(BC_FILES) $(SL_FILES) $(D_FILES) $(SO_TARG) $(DO_TARG) $(EO_TARG)
+
 #==================================================================================================
 # Diagnostics or setup for missing required values.
 #
@@ -237,24 +239,6 @@ L_LIBS:=$(LIBS:%=-l%)
 D_FILES:=$(SOURCES:%.cpp=${O_INTER}/%.d)
 
 
-
-#==================================================================================================
-# Target helpers
-#
-#	This section contains helpers that control the build.
-#
-
-#
-# Generate the included and "magically" created target and dependency
-# rules.
-#
-define GEN_PREREQUISITES
-	$(info $@ $<)
-#	$(call LOG_COMMAND,$(CXX) $(C_STD) -MM $(C_I) $(addsuffix .cpp,$(basename $(@F))) | sed 's~\(.*\)\.o[ :]*~${O_INTER}/\1.bc $@: ~g' > $@)
-endef
-
-
-
 #==================================================================================================
 #
 # Targets
@@ -282,9 +266,9 @@ doit: $(EO_TARG) $(SO_TARG) $(DO_TARG)
 .PHONY: Debug debug dbg d
 Debug debug dbg d:
 	@echo # Intentional White Space
-	$(call PRINT_MESSAGE,$(cIM),Debug build begin ($(TARGET)).)
+	$(call PRINT_MESSAGE,$(cIM),Debug ($(TARGET)).)
 	$(call SUB_MAKE     ,doit O_ARCH=$(O_ARCH) O_TYPE=debug SYMBOLS=1)
-	$(call PRINT_MESSAGE,$(cNO),Debug build finished ($(TARGET)).)
+	$(call PRINT_MESSAGE,$(cNO),Debug done ($(TARGET)).)
 
 #
 # Build release target using a sub-build
@@ -293,9 +277,9 @@ Debug debug dbg d:
 .PHONY: Release release rel r
 Release release rel r:
 	@echo # Intentional White Space
-	$(call PRINT_MESSAGE,$(cIM),Release build begin ($(TARGET)).)
+	$(call PRINT_MESSAGE,$(cIM),Release ($(TARGET)).)
 	$(call SUB_MAKE     ,doit O_ARCH=$(O_ARCH) O_TYPE=release OPTIMIZE=3)
-	$(call PRINT_MESSAGE,$(cNO),Release build finished ($(TARGET)).)
+	$(call PRINT_MESSAGE,$(cNO),Release done ($(TARGET)).)
 
 #
 # Clean targets for both release and debug.
@@ -303,18 +287,26 @@ Release release rel r:
 #
 .PHONY: Clean clean cln c
 Clean clean cln c:
+	@echo # Intentional White Space
+	$(call PRINT_MESSAGE,$(cIM),Clean ($(TARGET)).)
 	$(foreach a, $(ARCHITECTURES),                         		\
 		$(if $(call dir_exists,$(O_OBJ)),                  		\
 			$(foreach b,$(BUILDS),                         		\
 				$(if $(call dir_exists,$(O_OBJ)/$(a)_$(b)),		\
-					$(call CLEAN_BUILD,$(a),$(b))) ${NL}   		\
-				$(if $(call dir_exists,$(BIN_STAGING)$(a)_$(b)),\
-				    $(call RM,$(BIN_STAGING)$(a)_$(b)) ${NL})   \
-	         )                                             		\
-			$(call RM,$(O_OBJ)) ${NL}                      		\
+					$(call CLEAN_BUILD,$(a),$(b))       		\
+				)   											\
+	        )                                             		\
+			$(call RM,$(O_OBJ))                         		\
 		)                                                  		\
 	)
-	$(call PRINT_MESSAGE,$(cNO),Clean Finished.)
+	$(if $(call dir_exists,$(BIN_STAGING)),                     \
+		$(call RM,$(BIN_STAGING))  		      					\
+	)
+	$(if $(call dir_exists,$(LIB_STAGING)),                     \
+		$(call RM,$(LIB_STAGING)) 		       					\
+	)
+	$(call PRINT_MESSAGE,$(cNO),Clean done ($(TARGET)).)
+
 
 
 # Compile a cpp source file into LLVM byte-code file

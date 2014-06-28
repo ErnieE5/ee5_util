@@ -1,27 +1,21 @@
 
 DIRS:=src tests
 
-GOALS=r
 
-default:
-	@$(call RM,$(BL)) ${NL}
-	@$(foreach d,$(DIRS),cd $(d) && $(MAKE) -S -s $(GOALS) && cd ..;)
+default: Debug
 
 
 .PHONY: Debug debug dbg d
-Debug debug dbg d:
-	@$(call RM,$(BL)) ${NL}
-	@$(foreach d,$(DIRS),cd $(d) && $(MAKE) -S -s debug && cd ..;)
+Debug debug dbg d: fresh_log
+	$(call MAKE_DIRS, $(DIRS), debug)
 
 .PHONY: Release release rel r
-Release release rel r:
-	@$(call RM,$(BL)) ${NL}
-	@$(foreach d,$(DIRS),cd $(d) && $(MAKE) -S -s release && cd ..;)
+Release release rel r: fresh_log
+	$(call MAKE_DIRS, $(DIRS), release)
 
 .PHONY: Clean clean cln c
-Clean clean cln c:
-	@$(call RM,$(BL)) ${NL}
-	@$(foreach d,$(DIRS),cd $(d) && $(MAKE) -S -s clean && cd ..;)
+Clean clean cln c: fresh_log
+	$(call MAKE_DIRS, $(DIRS), clean)
 
 
 target_sup=\
@@ -31,6 +25,4 @@ $(eval include  $(BUILD_TOOLS)$(strip $(1))),\
 $(if $(subst /,,$(realpath ../$(2))),\
 $(call $(0),$(1),../$(2)),\
 $(error Makefile.root not found.)))
-
-
-
+$(call target_sup, utilities.mk)

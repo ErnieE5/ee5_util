@@ -61,8 +61,9 @@ BL?=$(BUILD_LOGS)build.log
 #	rm -fv file.xx | tee -a build.log
 #
 define CLEANUP
-	$(patsubst %,@rm -fv % | tee -a $(BL)${NL},$(O_TARG) $(C_FILES) $(D_FILES))
+	$(patsubst %,@rm -fv % >> $(BL)${NL},$(ALL_CREATED_FILES ) )
 endef
+
 
 #
 #
@@ -161,7 +162,7 @@ endef
 #
 define SUB_MAKE
 	@printf "[$(TIMESTAMP)] $(MAKE) -s $(1)\n" >> $(BL);
-	@$(MAKE) -s $(1);
+	@$(MAKE) --stop --silent $(1);
 endef
 
 #
@@ -171,14 +172,41 @@ define RM
 	$(call LOG_COMMAND  ,rm --verbose --recursive $(1),>,/dev/null)
 endef
 
+define REMOVE_TARGET_DIR
+	$(call PRINT_MESSAGE,$(cDT),removing $(1) )
+	$(if $(call dir_exists, $(1)), $(call RM ,$(1) ) )
+endef
+
 #
 # Cleanup the intermediary directory and remove it when done.
 #
 define CLEAN_BUILD
-	$(call PRINT_MESSAGE,$(cIM),Clean $(O_OBJ)/$(1)_$(2))
-	$(call SUB_MAKE     ,wipe)
+	$(call PRINT_MESSAGE,$(cDT),removing $(O_OBJ)/$(1)_$(2))
+	$(call SUB_MAKE     ,wipe O_TYPE=$(2))
 	$(call RM           ,$(O_OBJ)/$(1)_$(2))
+	$(call REMOVE_TARGET_DIR, $(BUILD_ROOT)bin/$(1)_$(2) )
+	$(call REMOVE_TARGET_DIR, $(BUILD_ROOT)lib/$(1)_$(2) )
+	#newline is required
 endef
+
+
+#
+# Make a sub directory
+#
+define MAKE_DIR
+	@$(foreach t,$(2),$(MAKE) --directory=$(1) --stop --silent $(t)) ${NL}
+endef
+
+#
+# Make all sub directories in list
+#
+define MAKE_DIRS
+	$(foreach d,$(1),$(call MAKE_DIR,$(d),$(2)))
+	@echo # Intentional White Space
+endef
+
+
+
 
 #-----------------------------------------------------------------------------------------------------------------------
 #
@@ -190,3 +218,11 @@ endef
 .PHONY: wipe
 wipe:
 	@$(CLEANUP)
+
+.PHONY: delete_log
+delete_log:
+	@$(shell rm -f $(BL))
+
+.PHONY: fresh_log
+fresh_log: delete_log
+	@printf "[$(TIMESTAMP)] Begin build log.\n" >> $(BL)
