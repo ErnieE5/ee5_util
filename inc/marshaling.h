@@ -23,8 +23,13 @@
 
 BNS( ee5 )
 
-
 //-------------------------------------------------------------------------------------------------
+// marshal_work / i_marshal_work implementations
+//
+//
+
+
+//
 // This is an "interface" class. That allows pretty much anything that implements the Execute
 // method be queued and generically executed.  The primary use is by the various instantiations
 // of the marshaled_call template below.
@@ -36,13 +41,12 @@ struct i_marshaled_call
     {
     }
 };
-
-
+//
+// Forward declaration of the marshal_delegate because it needs is_byval to operate properly
+//
 template<typename TFunction, typename TReturn, typename ...TArgs>
 class marshal_delegate;
-
-
-//-------------------------------------------------------------------------------------------------
+//
 // This is a slim wrapper around a marshal_delegate that adds the "overhead" of a v-table and
 // the extra indirection required for the abstraction of any call into void(void). It would
 // be possible to make this a base class and use multiple inheritance, but the clang front end
@@ -79,11 +83,6 @@ public:
         call();
     }
 };
-
-
-
-//-------------------------------------------------------------------------------------------------
-// marshal_work / i_marshal_work implementation
 //
 // The following "mess" is all linked together to make it "simpler" to assure the intent of the
 // programmer is followed but also to maintain efficiency.
@@ -117,17 +116,17 @@ private:
     // The following expression (bc) is used twice and might make it easier to read. (Ha!)
     //
     //  Basically:
-    //      This defines a type that is a template implementation that defines a type that
-    //      is a pointer to a member function that is void(void)
+    //      bc typedefs a template implementation of tc. The first template argument is of type
+    //      "pointer to a member of _" with a void(void) signature.
     //
     //              void( _::* )( )
     //
-    //      Then the type is used as an argument that MUST be a static type during compilation.
+    //      Then that type is used as an argument that MUST be a static type during compilation.
     //      If the second expression fails to match the signature, then SFINAE chooses the ( ... )
     //      methods. It is my hope that this name mangling is good enough!
     //
     template <typename _>
-    using bc = tc < void( _::* )( ), &_::ee5__CoPieD_ByVaL__ >;
+    using bc = tc < void( _::* )( ), &_::ee5__CoPieD_ByVaL__5ee >;
 
     template <typename _> static n&    chk( ... );     // Nope, not a byval wrapped class
     template <typename _> static empty typ( ... );     // empty type for me
@@ -185,7 +184,7 @@ struct copy_movable : B
     // This is a "magic" signature to allow for testing if an object ~is~ an implementation
     // of copy_movable for argument conversion. It is never called, just declared.
     //
-    void ee5__CoPieD_ByVaL__();
+    void ee5__CoPieD_ByVaL__5ee();
 
     // This type is the type that the signature of the TARGET call should have. The reason
     // for this is to avoid extra copies. The copied value ~stays~ in the std::tuple used to
@@ -193,21 +192,14 @@ struct copy_movable : B
     //
     using type = typename std::add_lvalue_reference<T>::type;
 
-    copy_movable( copy_movable&& o ) : B( std::move( static_cast<B&&>(o) ) )
+    copy_movable( copy_movable&& o ) : 
+        B( std::move( static_cast<B&&>(o) ) )
     {
-        auto tt = typeidname< B >();
-        printf("B: %s cctor\n",tt.get());
     }
 
-    copy_movable( T&& t ) : B( std::forward<T>(t) )
+    copy_movable( T&& t ) : 
+        B( std::forward<T>(t) )
     {
-        auto tt = typeidname< B >();
-        printf("B: %s ctor\n",tt.get());
-    }
-
-    operator B&&()
-    {
-        return static_cast<B&&>(*this);
     }
 };
 //
@@ -233,19 +225,131 @@ struct copy_movable : B
 //  nominal case.
 //
 template<typename T, typename std::enable_if< std::is_class<T>::value, T>::type* = nullptr >
-auto byval( T i )->copy_movable<typename std::decay<T>::type>&&
+auto byval( T i ) -> copy_movable<typename std::decay<T>::type>
 {
-    auto tt = typeidname< T >();
-    printf("T: %s\n",tt.get());
-    return std::move( copy_movable<typename std::decay<T>::type>( std::forward<T>(i) ) );
+    return copy_movable<typename std::decay<T>::type>( std::forward<T>( i ) );
 }
 //
-// a_sig is used to choose (adapt) the signature of the TARGET method to the appropriate type.
+// This template acts as storage for an action that needs to be marshaled or stored for a duration.
+// Once the marshaling process has taken place, the target of the action is invoked by calling the
+// function operator().  Depending on how this template is constructed, the method will be invoked
+// with the arguments supplied.
 //
-//  This has the effect of ~capturing~ most of the standard containers and moving the values
+// By default a complex object is MOVED into the tuple UNLESS the user elects to specifically use 
+// the byval() modifier function to explicitly create a copy of the object being marshaled.
+//
+// Complex objects that are sent byval() should have a reference value in the method signature. 
+//
+template<typename TFunction, typename TReturn, typename ...TArgs>
+class marshal_delegate
+{
+public:
+    static const size_t argument_count = sizeof...( TArgs );
+
+private:
+    // This is a compile time unpack routine that will expand the storage tuple
+    //
+    template<size_t...>             struct sequence { };
+    template<size_t N, size_t...S>  struct unpacker :unpacker < N - 1, N - 1, S... > { };
+    template<size_t...S>            struct unpacker < 0, S... >
+    {
+        typedef sequence<S...> type;
+    };
+
+    // Data type of the tuple container for the marshaled data and the declaration 
+    // for the unpack of the arguments.
+    //
+    using storage_t = std::tuple < typename std::decay< TArgs >::type... >;
+    using unpack_t  = typename unpacker< argument_count >::type;
+
+    // The actual declaration of the memory layout for the storage items being marshaled
+    //
+    TFunction   method;
+    storage_t   values;
+
+    // A simplification of determining the types of items that are in the tuple
+    //
+    template< size_t N >
+    using types = typename std::tuple_element< N, storage_t >::type;
+
+    // Empty selectors that use SFINAE selection of the way the arguments need to be 
+    // sent to the target routine.
+    //
+    struct moved_a { };
+    struct byval_a { };
+
+    // Select type for forwarding if the item was captured (moved/default behavior) 
+    // or if the item was explicitly sent by value.
+    //
+    template< size_t N >
+    using st = typename std::conditional< is_byval< types< N > >::value, byval_a, moved_a >::type;
+
+    // By default the items are captured and moved if the object has a move constructor 
+    // defined. This is the typical selector and the items are extracted from the tuple
+    // and sent to the target function.
+    //
+    template< size_t N, typename R = types<N>&& >
+    R send( moved_a )
+    {   
+        //     Move the item OUT of the tuple to the called routine.
+        //     |
+        return std::move( std::get<N>( values ) );
+    }
+
+    // When the user explicitly tells us that a copy of the value should be made, and we
+    // need to tell the compiler that we should send a reference to the base object to the
+    // target routine.
+    //
+    template< size_t N, typename R = typename is_byval<types<N>>::type& >
+    R send( byval_a )
+    {
+        //     Explicitly select the base object, not the wrapper
+        //     |
+        return static_cast<R>( std::get<N>( values ) );
+    }
+
+    // This routine is the result of a large amount of template magic that pulls all of the items 
+    // out of the tuple and calls the method, function, functor, or lamda captured in the method 
+    // with the arguments.
+    //
+    template<size_t...S>
+    TReturn tuple_call( sequence<S...> )
+    {
+        //             Use the appropriate forwarding routine based on the item in the container
+        //             |
+        //             |        Choose the way to send the value based on the item in the tuple
+        //             |        |
+        return method( send<S>( st<S>() ) ... );
+        //                  |      |       |
+        //                  |-------       Expand the argument pack
+        //                  |
+        //                  S the type is a size_t value that is incremented from 0 to the 
+        //                  number of arguments in the tuple. Keep in mind that if the 
+        //                  function type is void(void) then this expression is empty.
+    }
+
+public:
+    template<typename F, typename...A>
+    marshal_delegate( F f, A&&...args ) :
+        method( std::forward<F>( f ) ),
+        values( std::forward<A>( args )... )
+    {
+    }
+
+    inline TReturn operator()()
+    {
+        return tuple_call( unpack_t() );
+    }
+};
+//
+//  a_sig is used to choose (adapt) the signature of the TARGET method to the appropriate type.
+//
+//  The default has an effect of ~capturing~ most of the standard containers and moving the values
 //  instead of copying. As the containers aren't thread safe (by default) this avoids extra
-//  copies. If you ~don't~ want this default behavior, use the byval function to explicitly
-//  declare you really WANT to make a deep copy of the object.
+//  copies. A nifty implication of this is that it you keep your data in a "safely" copied
+//  object that has a move constructor, only one thread can use the data at a given time. (Use
+//  as a state like object.) If you ~don't~ want this default behavior, use the byval() function 
+//  to explicitly declare you really WANT to make a deep copy of the object.
 //
 template<typename Arg>
 struct a_sig
@@ -279,17 +383,17 @@ struct a_sig
 //
 // Helper to make the support of lambda expressions a little less hideous (IMO).
 //
-template<typename TFunc>
-struct m_valid
+template<typename F>
+struct f_valid
 {
-    using type = typename std::conditional <(
-        /* The function value must be a "class" that evaluates to a functor */
-        std::is_class< typename std::remove_pointer<TFunc>::type>::value ||
-        /* or a function type. */
-        std::is_function< typename std::remove_pointer<TFunc>::type>::value
-        ),
-        typename std::true_type,
-        typename std::false_type >::type;
+    using notptr = typename std::remove_pointer<F>::type;
+
+    using type = typename 
+        std::conditional <
+        /* if   */ std::is_class< notptr >::value || std::is_function< notptr >::value,
+        /* then */ typename std::true_type,
+        /* else */ typename std::false_type 
+        >::type;
 
     static const typename type::value_type value = type::value;
 };
@@ -448,7 +552,7 @@ public:
     // TArgs    Zero or more arguments
     //
     template<typename TFunc,typename...TArgs>
-    typename std::enable_if< m_valid<TFunc>::value, RC>::type
+    typename std::enable_if< f_valid<TFunc>::value, RC>::type
     /* RC */ Async(TFunc f, TArgs&&...args )
     {
         using namespace std;
@@ -471,198 +575,5 @@ protected:
 //
 using i_marshal_work = marshal_work < marshal_work_abstract > ;
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-//-------------------------------------------------------------------------------------------------
-// This template acts as storage for an action that needs to be marshaled or stored for a duration.
-// Once the marshaling process has taken place, the target of the action is invoked by calling the
-// function operator().  Depending on how this template is constructed, the method will be invoked
-// with the arguments supplied.
-//
-// This template ASSUMES copy semantics. The INTENTION of the class is to marshal data from the
-// point of construction to where it ultimately is in a context ready for execution.
-// The design is intended for threading, specifically for adding worker items to a
-// thread pool.  The examples show the idea.  If you are using these objects outside the thread
-// system you need to know this, otherwise most of the "goodness" happens under the covers.
-//
-// This template doesn't enforce what the function signature of the target should look like. Data
-// marshaled is stored in a tuple by value. Complex objects should have a reference value in the
-// method signature. See example 3 below.  The method signature for the object_method_delegate
-// has a reference item for the vector of integers, but the argument for marshal_delegate is the
-// storage type.  You CAN pass the complex object by value, but that likely to be "stupidly"
-// expensive as the perfectly good copy already IN the tuple will get copied again. If you REALLY
-// need to keep only one copy around, consider pointers and don't forget about locking.  (But you
-// already know this anyway right?)
-//
-// std::bind is very close to this idea. I may switch, but I have have used T*, and T::*pmf in that
-// order for going on 19 years at this point. I understand WHY the STL flipped it, but it is hard to
-// adjust right now...
-//
-//
-//  Examples:
-//        #include <iostream>
-//        #include <vector>
-//        #include <functional>
-//
-//        typedef std::vector<int> int_vec;
-//
-//        void Foo(int a)
-//        {
-    //            std::cout << "Foo(" << a << ")" << std::endl;
-//        }
-//
-//        struct Bar
-//        {
-    //            void Foo(int a)
-//            {
-    //                std::cout << "Bar::Foo(" << a << ")" << std::endl;
-//            }
-//            size_t Wow(int_vec& v)
-//            {
-    //                std::cout << "Bar::Wow(" << v.front() << ")" << std::endl;
-//                return v.size();
-//            }
-//        };
-//
-//        typedef std::function< void(int) >                   F1;
-//        typedef object_method_delegate<Bar,void,int>         F2;
-//        typedef object_method_delegate<Bar,size_t,int_vec&>  F3;
-//
-//        int main()
-//        {
-    //            Bar b;
-//
-//            marshal_delegate< F1, void, int>        store1( Foo, 42 );
-//            marshal_delegate< F2, void, int>        store2( F2(&b, &Bar::Foo), 42 );
-//            marshal_delegate< F3, size_t, int_vec>  store3( F3(&b, &Bar::Wow), int_vec( { 42 } ) );
-//
-//            store1();
-//            store2();
-//            store3();
-//        }
-//
-//
-template<typename TFunction, typename TReturn, typename ...TArgs>
-class marshal_delegate
-{
-public:
-    static const size_t argument_count = sizeof...( TArgs );
-
-private:
-    template<size_t...>             struct sequence { };
-    template<size_t N, size_t...S>  struct unpacker :unpacker < N - 1, N - 1, S... > { };
-    template<size_t...S>            struct unpacker < 0, S... > { typedef sequence<S...> type; };
-
-    using storage_t = std::tuple < typename std::decay<TArgs>::type... > ;
-    using unpack_t  = typename unpacker<argument_count>::type;
-
-    template<std::size_t N>
-    using types = typename std::tuple_element<N, storage_t>::type;
-
-    TFunction   method;
-    storage_t   values;
-
-
-//     template<size_t N,size_t...S>
-//     struct expando : expando< N-1,N-1,S...>
-//     {
-//         static void doit()
-//         {
-//             auto tt = typeidname< types<N> >();
-//             printf("expando: %s\n",tt.get());
-//             printf("expando %lu ...  %i\n",N,std::conditional< is_byval<types<N>>::value, std::true_type,std::false_type>::type::value );
-//         }
-//
-//     };
-//
-//     template<size_t...N>
-//     struct expando<0,N...>
-//     {
-//         using type = typename std::conditional< is_byval<types<0>>::value, std::true_type,std::false_type>::type;
-//
-//         static auto doit()->typename std::conditional< is_byval<types<0>>::value, std::true_type,std::false_type>::type::value
-//         {
-//             auto tt = typeidname< types<0> >();
-//             printf("expando: %s\n",tt.get());
-//             printf("expando: %i ...  %i\n",0,std::conditional< is_byval<types<0>>::value, std::true_type,std::false_type>::type::value );
-//         }
-//     };
-    struct moved_arg {};
-    struct byval_arg {};
-
-
-    template< size_t N, typename R = types<N>&& >
-    R send( moved_arg )
-    {
-        return std::move( std::get<N>( values ) );
-    }
-
-    template< size_t N,typename R = typename is_byval<types<N>>::type& >
-    R send( byval_arg )
-    {
-        return static_cast<R>( std::get<N>( values ) );
-    }
-
-    template<size_t N>
-    using st = typename
-                std::conditional<
-                    is_byval<types<N>>::value,
-                    byval_arg,
-                    moved_arg
-                >::type;
-
-    template<size_t N>
-    using ag = typename
-                std::conditional<
-                    is_byval<types<N>>::value,
-                    typename is_byval<types<N>>::type,
-                    types<N>
-                >::type;
-
-
-
-    template<size_t...S>
-    TReturn tuple_call( sequence<S...> )
-    {
-// std::forward<ag<S>>(
-        return method(  send<S>( st<S>() ) ... );
-    }
-
-
-public:
-    template<typename F,typename...A>
-    marshal_delegate( F f, A&&...args ) :
-    method( std::forward<F>( f ) ),
-    values( std::forward<A>( args )... )
-    {
-    }
-
-    //     template<typename...Ta1>
-    //     marshal_delegate( TFunction f, Ta1...args ) :
-    //         method( std::forward<TFunction>(f) ),
-    //         values( std::forward<Ta1>(args)...)
-    //     {
-        //
-        //     }
-
-
-    inline TReturn operator()()
-    {
-        return tuple_call( unpack_t() );
-    }
-};
 
 ENS( ee5 )

@@ -66,6 +66,39 @@ public:
 };
 
 
+// This is just a skeleton of an idea. I dislike heavy macro usage, but a large amount 
+// of the "hate" of macros has been transferred to template meta programming at the moment! :-O
+//
+template<typename F, F method, typename O, typename...TArgs>
+class object_instance_binder
+{
+private:
+    O* object;
+
+public:
+    using return_type = decltype( ( std::declval<O>().*method )( std::declval<TArgs>()... ) );
+
+    object_instance_binder() = delete;
+
+    object_instance_binder( O* o ) :
+        object( o )
+    {
+    }
+
+    object_instance_binder( const object_instance_binder& _o ) :
+        object( _o.object )
+    {
+    }
+
+    return_type operator()( TArgs&&...args )
+    {
+        return ( object->*method )( std::move( args )... );
+    }
+};
+
+#define instance_binder(O,M,...) \
+    object_instance_binder< decltype(&O::M), &O::M, O, ##__VA_ARGS__ >
+
 
 
 
