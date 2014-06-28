@@ -471,9 +471,10 @@ RC FunctionTests()
     std::string value("Hey dude!");
     std::vector<double> dv( { 10.1, 10.2, 10.3, 10.4, 10.5, 10.6, 10.7, 10.8, 10.9 } );
 
-    async->Async( [](std::string s)  { /*...*/ }, std::string( value ) );
+    async( [](std::string s)  { /*...*/ }, std::string( value ) );
 
-    async->Async( [](std::string& s) { /*...*/ }, byval( value ) );
+    async( [](const std::string& s) { /*...*/ }, byval( value ) );
+    async( [](const std::vector<double>& v) { }, byval( dv ) );
 
     using lid = std::list < double > ;
     lid dl( { 1.1, 1.2, 1.3, 1.4, 1.5, 1.6 } );

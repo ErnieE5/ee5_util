@@ -290,8 +290,8 @@ private:
     // defined. This is the typical selector and the items are extracted from the tuple
     // and sent to the target function.
     //
-    template< size_t N, typename R = types<N>&& >
-    R send( moved_a )
+    template< size_t N>
+    auto send( moved_a ) -> types<N>&&
     {
         //     Move the item OUT of the tuple to the called routine.
         //     |
@@ -302,12 +302,10 @@ private:
     // need to tell the compiler that we should send a reference to the base object to the
     // target routine.
     //
-    template< size_t N, typename R = typename is_byval<types<N>>::type_ref >
-    R send( byval_a )
+    template< size_t N>
+    auto send( byval_a ) -> typename is_byval<types<N>>::type_ref
     {
-        //     Explicitly select the base object, not the wrapper
-        //     |
-        return static_cast<R>( std::get<N>( values ) );
+        return std::get<N>( values );
     }
 
     // This routine is the result of a large amount of template magic that pulls all of the items
