@@ -1,7 +1,7 @@
 #--------------------------------------------------------------------------------------------------
 # Copyright (C) 2014 Ernest R. Ewert
-# 
-# Feel free to use this as you see fit. 
+#
+# Feel free to use this as you see fit.
 # I ask that you keep my name with the code.
 #
 # THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
@@ -75,6 +75,14 @@ define verify_directory
 		mkdir -vp $(1) 2>&1 >> $(BL); \
 	}; exit 0
 endef
+
+#
+#
+#
+define file_exists
+$(shell [ -s $(1) ] && { echo y; })
+endef
+
 
 #
 #
@@ -206,12 +214,29 @@ define MAKE_DIRS
 endef
 
 
+define start_point
+$(if $(call file_exists,dirs),\
+  $(eval include dirs)\
+)\
+$(if $(DIRS),\
+  $(eval include $(BUILD_TOOLS)dirs.mk),\
+  $(if $(call file_exists,sources),\
+    $(eval include sources)\
+  )\
+)\
+$(if $(COMPILER),\
+  $(eval include $(BUILD_TOOLS)$(COMPILER).mk)\
+)
+endef
 
-
-#-----------------------------------------------------------------------------------------------------------------------
-#
-# "Standard" Targets
-#
+.PHONY: util_default
+util_default:
+	@printf "\n"
+	@printf "$(cIM)Try:\n"
+	@printf "$(cTS)\tmake Debug   | debug   | dbg | d\n"
+	@printf "$(cTS)\tmake Release | release | rel | r\n"
+	@printf "$(cTS)\tmake Clean   | clean   | cln | c\n"
+	@printf "\n"
 
 # This is the "worker" for the clean stage. See comment on
 # the CLEANUP "expansion."

@@ -1,18 +1,26 @@
-
+#--------------------------------------------------------------------------------------------------
+# Makefile.root contains definitions common to
+# all sub projects being built for Linux and should
+# not contain any values that are "local" to the
+# installation. This project is NOT setup for
+# automake (yet?) but the Makefile.config is the
+# intended location for that stuff. (Unless forced
+# to do it another way.)
+#
+# Any of these definitions could be overridden in Makefile.config
+#
 
 BUILD_ROOT:=$(dir $(lastword $(MAKEFILE_LIST)))
 BUILD_TOOLS:=$(BUILD_ROOT)bld/
-INCLUDE_PATHS=$(BUILD_ROOT)inc/
+INCLUDE_PATHS:=$(BUILD_ROOT)inc/
 
-BIN_STAGING=$(abspath $(BUILD_ROOT)bin/)
-LIB_STAGING=$(abspath $(BUILD_ROOT)lib/)
+BIN_STAGING:=$(abspath $(BUILD_ROOT)bin/)
+LIB_STAGING:=$(abspath $(BUILD_ROOT)lib/)
 
-BUILD_LOGS=$(BUILD_ROOT)
+BUILD_LOGS:=$(BUILD_ROOT)
+
+LIBS+=\
+    pthread \
 
 include $(BUILD_ROOT)Makefile.config
 
-
-#C_FLAGS=-static
-
-LIBS+=\
-	pthread \

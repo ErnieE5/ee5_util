@@ -65,8 +65,6 @@ usage:
 	@printf "$(cTS)\tmake Clean   | clean   | cln | c\n"
 	@printf "\n"
 
-include $(dir $(lastword $(MAKEFILE_LIST)))utilities.mk
-
 
 #==================================================================================================
 #
@@ -98,13 +96,13 @@ ALL_CREATED_FILES=$(O_TARG) $(BC_FILES) $(SL_FILES) $(D_FILES) $(SO_TARG) $(DO_T
 #
 # TODO: Need to fix multi ARCH
 #
-ifeq ($(strip $(ARCHITECTURES)),)
+ifeq (,$(strip $(ARCHITECTURES)))
 $(error You must specify a single ARCH ~for now~.)
 endif
 
 
-ifeq ($(strip $(SOURCES)),)
-	$(error You must specify a set of SOURCES.)
+ifeq (,$(strip $(SOURCES)))
+error You must specify a set of SOURCES to use clang++.)
 endif
 
 #==================================================================================================

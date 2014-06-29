@@ -1,0 +1,19 @@
+
+TARGET:=libee5_util
+COMPILER=clang++
+
+LIBRARY_MAKE=dynamic static
+LIBRARY_VER=0.0.1
+
+SOURCES:=\
+    console_logger.cpp\
+    error.cpp\
+    system.cpp\
+    threadpool.cpp\
+    workthread.cpp
+
+SYMBOLS=1
+
+FARGUMENTS:= \
+	error-limit=5\
+
