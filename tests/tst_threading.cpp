@@ -413,16 +413,16 @@ RC FunctionTests()
 //
 
 
-     //us_stopwatch_s tpmf;
-     //rvalue_test x( &tp );
-     //size_t pmftime = tpmf.delta();
+     us_stopwatch_s tpmf;
+     rvalue_test x( async );
+     size_t pmftime = tpmf.delta();
 
-     //us_stopwatch_s tlambda;
-     //tst_rvalue_transfers( &tp );
-     //size_t lambdas = tlambda.delta();
+     us_stopwatch_s tlambda;
+     tst_rvalue_transfers( async );
+     size_t lambdas = tlambda.delta();
 
-     //LOG_UNAME( "jtst", "Labmda's   :%llu us", lambdas );
-     //LOG_UNAME( "jtst", "PMF's      :%llu us", pmftime );
+     LOG_UNAME( "jtst", "Labmda's   :%llu us", lambdas );
+     LOG_UNAME( "jtst", "PMF's      :%llu us", pmftime );
 
      //while( tp.Pending() )
      //{

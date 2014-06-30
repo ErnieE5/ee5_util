@@ -52,11 +52,11 @@ class marshal_delegate;
 // be possible to make this a base class and use multiple inheritance, but the clang front end
 // and LLVM back-end do an exceptional job of making most of this disappear.
 //
-template<typename TFunc, typename ...TArgs>
+template<typename TFunc, typename... TArgs>
 class marshaled_call : public i_marshaled_call
 {
 public:
-    typedef marshal_delegate<TFunc, void, TArgs...> Delegate;
+    typedef marshal_delegate< TFunc, void, TArgs... > Delegate;
 
 private:
     Delegate call;
@@ -90,7 +90,7 @@ public:
 // is_byval is a "typical" way to determine if a method exists in a template expansion. The "extra"
 // weirdness is the detection of the "inner" type that is wrapped. Because of the way templates
 // are expanded, all branches are evaluated. The empty struct gives a void type that is never
-// used except by the initial expansions.  (Thanks internet for the basic idea!)
+// used except by the initial expansions.  (Thanks Internet for the basic idea!)
 //
 // The verbosity of template meta-programming is a bit much. I love that it enables this type of
 // adaptation to the language because this code allows for "modern styles" of programming within
@@ -166,7 +166,7 @@ struct copy_nothing
 {
 };
 //
-// Selector to choose the base implementation for the copy_movable adaptor
+// Selector to choose the base implementation for the copy_movable adapter
 //
 template<typename T>
 using select_base = typename
@@ -208,13 +208,13 @@ struct copy_movable : select_base<T>
 // This function allows a user of the async marshaling to make a normally movable class object
 // into a copied object.  The class is used as the base of a carrier that allows the a_sig
 // routines to override the default behavior of moving an object. This is useful if the INTENT
-// of the async call is to use a COPY of an otherwise moveable object.
+// of the async call is to use a COPY of an otherwise movable object.
 //
 // Given a std::string that is a member you might not want to move it around. (I really wouldn't
 // want to copy it in most cases either, but hey sometimes you have to!) So you can:
 //
 //      (1) Create a copy and have that copy moved to the called target.
-//      (2) Or force the marshalling routines to use copy semantics.
+//      (2) Or force the marshaling routines to use copy semantics.
 //
 //      std::string = "Hi ya!";
 //
@@ -222,7 +222,7 @@ struct copy_movable : select_base<T>
 //      Async( [](std::string& s) { /*...*/ }, byval( value ) );        // (2)
 //
 //  More or less the above examples are identical in effect. What you choose to do should be
-//  dependant on the requirements at hand. (i.e. The method is sometimes called async, but
+//  dependent on the requirements at hand. (i.e. The method is sometimes called async, but
 //  most of the time it is used "inline" and a reference signature is more appropriate for the
 //  nominal case.
 //
@@ -406,7 +406,7 @@ struct f_valid
     using call = marshaled_call < F, TArgs... > ;
 };
 //
-// marshal_work is a container for the adaptors that make it much simpler to capture
+// marshal_work is a container for adapters that make it much simpler to capture
 // the information needed to marshal data between threads without ~having~ to create
 // objects to move simple parameters. This implementation is based on many C++11 constructs
 // but doesn't use a few of the "obvious" ones. std::bind, std::function are both avoided
@@ -444,7 +444,7 @@ private:
             // get storage. With the variadic template support, the requirement for the allocation
             // routines to be on the other side of an abstract class is relaxed. However, this
             // marshaling front end doesn't have a performance penalty when a non-abstract base
-            // class is used.  (Depending on the compiler, almost everything can get fully 
+            // class is used.  (Depending on the compiler, almost everything can get fully
             // inlined in that case.)
             //
             rc = get_storage( sizeof( P ), reinterpret_cast<void**>( &call ) );
@@ -458,12 +458,12 @@ private:
                 //
                 //                           The package that holds all required data placed in
                 //                           a single location (no use of ::new by any of the
-                //                           marshalling routines)
+                //                           marshaling routines)
                 //                           |
                 //                           |
                 //                           |              The function/functor that is used
                 //                           |              to produce the proper stack frame
-                //                           |              when the marshalling process is
+                //                           |              when the marshaling process is
                 //                           |              ready to "run" the function.
                 //                           |              |
                 rc = enqueue_work( new(call) P( forward<F>( f ), forward<TArgs>( args )... ) );
@@ -489,7 +489,7 @@ public:
     //  Call a member function of a class in the context of an underlying implementation
     //  with zero or more arguments using move semantics. Any STL container or other class that
     //  implements a move constructor passed as an argument will be MOVED from the original
-    //  container into the marshalling data and then moved out after the marshalling has taken
+    //  container into the marshaling data and then moved out after the marshaling has taken
     //  place.
     //
     //      struct C
@@ -559,7 +559,7 @@ public:
     //
     template<typename TFunc,typename...TArgs>
     typename std::enable_if< f_valid<TFunc>::value, RC>::type
-    /* RC */ Async(TFunc f, TArgs&&...args )
+    /* RC */ Async( TFunc f, TArgs&&...args )
     {
         using namespace std;
         using method_t = typename T::template call<TFunc, typename a_sig<TArgs>::type...>;
