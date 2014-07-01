@@ -159,6 +159,17 @@ public:
 template<typename T>
 class copy_movable;
 //
+// Helper to clean up repeated uses of the declaration
+//
+template<typename T>
+using decay_cm = copy_movable<typename std::decay<T>::type>;
+//
+// Helper to make the actual function call somewhat readable.
+//
+template<typename T>
+using byval_enable = typename 
+    std::enable_if< std::is_class< decay_cm<T> >::value, decay_cm<T> >::type;
+//
 // This function allows a user of the async marshaling to make a normally movable class object
 // into a copied object.  The class is used as the base of a carrier that allows the a_sig
 // routines to override the default behavior of moving an object. This is useful if the INTENT
@@ -181,16 +192,9 @@ class copy_movable;
 //  nominal case.
 //
 template<typename T>
-using cm_decay  = copy_movable<typename std::decay<T>::type>;
-//
-template<typename T>
-using cm_enable = typename std::enable_if< std::is_class<cm_decay<T>>::value, cm_decay<T> >::type;
-
-//
-template<typename T>
-cm_enable<T> byval( T i )
+byval_enable<T> byval( T i )
 {
-    return cm_decay<T>( std::forward<T>( i ) );
+    return decay_cm<T>( std::forward<T>( i ) );
 }
 //
 // The template expansion routines end up always expanding the arguments even if the
@@ -221,23 +225,26 @@ using select_base = typename
 template<typename T>
 class copy_movable : public select_base<T>
 {
-    using base = select_base<T>;
-    using self = copy_movable<T>;
+    using base = select_base<T>;    // Used to in a number of locations
+    using self = copy_movable<T>;   // Used to in a number of locations
 
-    friend self     byval<T>(T);
+    friend self  byval<T>(T);       // Needed for construction
+    friend class is_byval < T >;    // Needed for testing NON wrapped items
+    friend class is_byval < self >; // Needed for testing already wrapped items
 
-    copy_movable( T&& t ) :
-        base( std::forward<T>(t) )
-    {
-    }
-
-public:
     // This is a "magic" signature to allow for testing if an object ~is~ an implementation
     // of copy_movable for argument conversion. It is never called, just declared.
     //
     void ee5__CoPieD_ByVaL__5ee();
 
+    // Only allow our befriended external function to construct an object.
+    //
+    copy_movable( T&& t ) :
+        base( std::forward<T>( t ) )
+    {
+    }
 
+public:
     // This type is the type that the signature of the TARGET call should have. The reason
     // for this is to avoid extra copies. The copied value ~stays~ in the std::tuple used to
     // marshal the data across what ever boundary (thread/queue, etc.).
