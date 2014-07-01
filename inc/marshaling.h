@@ -154,6 +154,42 @@ public:
     using type_ref = typename std::add_lvalue_reference<type>::type;
 };
 //
+// Forward declaration for use in byval() adapter
+//
+template<typename T>
+class copy_movable;
+//
+// This function allows a user of the async marshaling to make a normally movable class object
+// into a copied object.  The class is used as the base of a carrier that allows the a_sig
+// routines to override the default behavior of moving an object. This is useful if the INTENT
+// of the async call is to use a COPY of an otherwise movable object.
+//
+// Given a std::string that is a member you might not want to move it around. (I really wouldn't
+// want to copy it in most cases either, but hey sometimes you have to!) So you can:
+//
+//      (1) Create a copy and have that copy moved to the called target.
+//      (2) Or force the marshaling routines to use copy semantics.
+//
+//      std::string = "Hi ya!";
+//
+//      Async( [](std::string s)  { /*...*/ }, std::string( value ) );  // (1)
+//      Async( [](std::string& s) { /*...*/ }, byval( value ) );        // (2)
+//
+//  More or less the above examples are identical in effect. What you choose to do should be
+//  dependent on the requirements at hand. (i.e. The method is sometimes called async, but
+//  most of the time it is used "inline" and a reference signature is more appropriate for the
+//  nominal case.
+//
+template<typename T>
+using cm_decay = copy_movable<typename std::decay<T>::type>;
+//
+template<typename T>
+typename std::enable_if< std::is_class<cm_decay<T>>::value, cm_decay<T> >::type
+/* copy_movable<t> */ byval( T i )
+{
+    return cm_decay<T>( std::forward<T>( i ) );
+}
+//
 // The template expansion routines end up always expanding the arguments even if the
 // evaluation path is short circuited in the conditional. (This doesn't match the semantics
 // you might expect of a typical if routine. (i.e. stop evaluation if the first argument tells
@@ -180,13 +216,24 @@ using select_base = typename
 // make a copy and not give up the resources.
 //
 template<typename T>
-struct copy_movable : select_base<T>
+class copy_movable : public select_base<T>
 {
     using base = select_base<T>;
+    using self = copy_movable<T>;
+
+    friend self     byval<T>(T);
+
+    copy_movable( T&& t ) :
+        base( std::forward<T>(t) )
+    {
+    }
+
+public:
     // This is a "magic" signature to allow for testing if an object ~is~ an implementation
     // of copy_movable for argument conversion. It is never called, just declared.
     //
     void ee5__CoPieD_ByVaL__5ee();
+
 
     // This type is the type that the signature of the TARGET call should have. The reason
     // for this is to avoid extra copies. The copied value ~stays~ in the std::tuple used to
@@ -198,39 +245,7 @@ struct copy_movable : select_base<T>
         base( std::move( static_cast<base&&>(o) ) )
     {
     }
-
-    copy_movable( T&& t ) :
-        base( std::forward<T>(t) )
-    {
-    }
 };
-//
-// This function allows a user of the async marshaling to make a normally movable class object
-// into a copied object.  The class is used as the base of a carrier that allows the a_sig
-// routines to override the default behavior of moving an object. This is useful if the INTENT
-// of the async call is to use a COPY of an otherwise movable object.
-//
-// Given a std::string that is a member you might not want to move it around. (I really wouldn't
-// want to copy it in most cases either, but hey sometimes you have to!) So you can:
-//
-//      (1) Create a copy and have that copy moved to the called target.
-//      (2) Or force the marshaling routines to use copy semantics.
-//
-//      std::string = "Hi ya!";
-//
-//      Async( [](std::string s)  { /*...*/ }, std::string( value ) );  // (1)
-//      Async( [](std::string& s) { /*...*/ }, byval( value ) );        // (2)
-//
-//  More or less the above examples are identical in effect. What you choose to do should be
-//  dependent on the requirements at hand. (i.e. The method is sometimes called async, but
-//  most of the time it is used "inline" and a reference signature is more appropriate for the
-//  nominal case.
-//
-template<typename T, typename std::enable_if< std::is_class<T>::value, T>::type* = nullptr >
-auto byval( T i ) -> copy_movable<typename std::decay<T>::type>
-{
-    return copy_movable<typename std::decay<T>::type>( std::forward<T>( i ) );
-}
 //
 // This template acts as storage for an action that needs to be marshaled or stored for a duration.
 // Once the marshaling process has taken place, the target of the action is invoked by calling the
@@ -352,13 +367,14 @@ public:
 //  to explicitly declare you really WANT to make a deep copy of the object.
 //
 template<typename Arg>
-struct a_sig
+class a_sig
 {
     // Helpers to make this slightly less verbose
     //
     using decay = typename std::decay<Arg>::type;
     using lvalr = typename std::add_lvalue_reference<Arg>::type;
 
+public:
     //  If the Arg is a byval wrapper: Expand, then use the type
     //  of the wrapped item (a reference to the object in the called target).
     //
