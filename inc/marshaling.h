@@ -181,11 +181,14 @@ class copy_movable;
 //  nominal case.
 //
 template<typename T>
-using cm_decay = copy_movable<typename std::decay<T>::type>;
+using cm_decay  = copy_movable<typename std::decay<T>::type>;
 //
 template<typename T>
-typename std::enable_if< std::is_class<cm_decay<T>>::value, cm_decay<T> >::type
-/* copy_movable<t> */ byval( T i )
+using cm_enable = typename std::enable_if< std::is_class<cm_decay<T>>::value, cm_decay<T> >::type;
+
+//
+template<typename T>
+cm_enable<T> byval( T i )
 {
     return cm_decay<T>( std::forward<T>( i ) );
 }

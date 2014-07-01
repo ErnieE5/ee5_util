@@ -181,8 +181,8 @@ define RM
 endef
 
 define REMOVE_TARGET_DIR
-	$(call PRINT_MESSAGE,$(cDT),removing $(1) )
-	$(if $(call dir_exists, $(1)), $(call RM ,$(1) ) )
+	$(if $(call dir_exists,$(call strip,$(1))), $(call PRINT_MESSAGE,$(cDT),removing $(1) ) )
+	$(if $(call dir_exists,$(call strip,$(1))), $(call RM ,$(1) ) )
 endef
 
 #
@@ -192,9 +192,9 @@ define CLEAN_BUILD
 	$(call PRINT_MESSAGE,$(cDT),removing $(O_OBJ)/$(1)_$(2))
 	$(call SUB_MAKE     ,wipe O_TYPE=$(2))
 	$(call RM           ,$(O_OBJ)/$(1)_$(2))
-	$(call REMOVE_TARGET_DIR, $(BUILD_ROOT)bin/$(1)_$(2) )
-	$(call REMOVE_TARGET_DIR, $(BUILD_ROOT)lib/$(1)_$(2) )
-	#newline is required
+	$(call REMOVE_TARGET_DIR,$(BUILD_ROOT)bin/$(1)_$(2))
+	$(call REMOVE_TARGET_DIR,$(BUILD_ROOT)lib/$(1)_$(2))
+
 endef
 
 
